@@ -16,8 +16,6 @@ VoltageMEMORY=0
 
 opts=0
 
-echo "DVFS Edit Script."
-
 while getopts rL:C:V:l:c:v:P:p: option
 do
 	opts=1
@@ -80,6 +78,6 @@ fi
 if [ $SetLevelMEMORY != -1 ]
 then
 	rocm-smi --setperflevel manual
-	echo "Setting GPU level to $SetLevelMEMORY"
+	echo "Setting GPU Memory level to $SetLevelMEMORY"
 	rocm-smi --setmclk $SetLevelMEMORY
 fi

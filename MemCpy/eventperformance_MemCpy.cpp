@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "../lcutil.h"
 
@@ -78,7 +79,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, double * hostIn, double * hostOut){
+void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut){
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -86,7 +87,7 @@ void runbench(double* kernel_time, double* flops, double * hostIn, double * host
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<double>), dim3(dimGrid), dim3(dimBlock ), 0, 0, (double *) hostIn, (double *) hostOut);
+    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -106,20 +107,21 @@ int main(int argc, char *argv[]){
 	printf("Usage: %s [device_num] [metric_name]\n", argv[0]);
 	int ntries;
 	unsigned int size, sizeB; 
-	if (argc > 2){
+	if (argc > 2) {
 		size = atoi(argv[1]);
-		sizeB = atoi(argv[1])*sizeof(double);
 		ntries = atoi(argv[2]);
 	}
 	else if(argc > 1) {
 		size = atoi(argv[1]);
-		sizeB = atoi(argv[1])*sizeof(double);
 		ntries = 1;
 	}
 	else {
 		printf("No size given!!!\n");
 		exit(1);
 	}
+
+	// Computes the total size in bits
+	sizeB = size*sizeof(int);
 
 	if(size >= 1024) {
 		if(size % 1024 != 0) {
@@ -130,14 +132,12 @@ int main(int argc, char *argv[]){
 
 	hipSetDevice(deviceNum);
 
-	double time[ntries][2], value[ntries][4];
+	double n_time[ntries][2], value[ntries][4];
 
 
 	// DRAM Memory Capacity
 	size_t freeCUDAMem, totalCUDAMem;
 	HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
-	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer size: %luMB\n", size*sizeof(double)/(1024*1024));
 
 	HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
@@ -152,45 +152,82 @@ int main(int argc, char *argv[]){
 	}	
 
 	// Initialize Host Memory
-	double *hostIn = (double *) malloc(size * sizeof(double));
-	double *hostOut = (double *) calloc(size, sizeof(double));
+	int *hostIn = (int *) malloc(size * sizeof(int));
+	int *hostOut = (int *) calloc(size, sizeof(int));
 
+	// Generates array of random numbers
+    srand((unsigned) time(NULL));
+    int sum = 0;
+	int random = 0;
 	// Initialize the input data
-	for (i = 0; i < size; i++) {
-		hostIn[i] = (double) i*100.0f;
+	for (i = 0; i < size-1; i++) {
+		random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
+		hostIn[i] = random;
+		sum += random;
 	}
+	// Places the sum on the last vector position
+	hostIn[i] = sum;
 
 	// Initialize Host Memory
-	double* deviceIn;
-	double* deviceOut;
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(double)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(double)));
-
-	// Transfer data from host to device
-	HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(double), hipMemcpyHostToDevice));
+	int* deviceIn;
+	int* deviceOut;
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
-	int status = system("ls");
+	// Transfer data from host to device
+	hipEvent_t start, stop;
+	initializeEvents(&start, &stop);
+	HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	double MemCpyTime = finalizeEvents(start, stop);
+	
+
+	// Synchronize in order to wait for memory operations to finish
+	HIP_SAFE_CALL(hipDeviceSynchronize());
+
+	// Resets the DVFS Settings
+	int status = system("rocm-smi -r");
+	status = system("../DVFS -P 7");
+	status = system("../DVFS -p 3");
 
 	for (i=0;i<1;i++){
 		runbench_warmup();
 	}
 	for (i=0;i<ntries;i++){
-		runbench(&time[0][0],&value[0][0], deviceIn, deviceOut);
-		printf("Registered time: %f ms\n", time[0][0]);
+		runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
+		printf("Registered time: %f ms\n", n_time[0][0]);
 	}
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
 	// Transfer data from device to host
-	HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut, size*sizeof(double), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
-	HIP_SAFE_CALL( hipDeviceReset());
+	HIP_SAFE_CALL(hipDeviceReset());
+
+	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
+	printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
+	printf("MemCpyTime %f ms\n", MemCpyTime);
+
+	// Verification of data transfer
+	int sum_received = 0;
+	for (i = 0; i < size-1; i++) {
+		sum_received += hostOut[i];
+	}
+	if(sum == sum_received && sum == hostOut[size-1]) {
+		printf("Correct!\n");
+	}
+	else {
+		printf("Incorrect\n");
+	}
+
+	free(hostIn);
+	free(hostOut);
 	return 0;
 }
