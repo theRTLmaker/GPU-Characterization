@@ -172,6 +172,8 @@ int main(int argc, char *argv[]){
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
+	int status = system("ls");
+
 	for (i=0;i<1;i++){
 		runbench_warmup();
 	}
