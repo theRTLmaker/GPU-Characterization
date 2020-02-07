@@ -182,85 +182,6 @@ if args.c == 1 and args.m == 1:
 # Exploration of Core
 elif args.c == 1:
 	print("Exploration of Core")
-	if args.v == 1:
-		print("	Exploration of volt")
-		# Run the benchmark for the proposed levels
-		for levels in args.levelscore:
-			working = [1] * 8
-			while 1 in working:
-				# Run the benchmark for the proposed levels
-				for levels in args.levelscore:
-					# Check if level is still giving valid results
-					if working[levels] == 0:
-						continue
-					# Set Core performance level to the one to be tested
-					if editPerformanceLevel("core", int(levels)) == False:
-						working[levels] = 0
-						continue
-					# Set Memory performance level to the highest
-					if editPerformanceLevel("mem", 3) == False:
-						working[levels] = 0
-						continue
-					# Get current DVFS settings - to make sure it was correctly applyed
-					if currentPerfLevel() != (int(levels), 3):
-						working[levels] = 0
-						continue
-
-					# Run the benchmark
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage")
-					runBashCommand(commandBenchmark)
-
-					# Write GPU Temp to end of output file
-					appendCurrentTemp(commandBenchmark)
-					
-				# Undervolt Core by 10mV
-				CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
-				for levels in range(0,8):
-					if setPerformanceLevel("core", levels) == False:
-						working[levels] = 0
-
-
-	else:
-		print("	Exploration of freq")
-		# Run the benchmark for the proposed levels
-		for levels in args.levelscore:
-			working = [1] * 8
-			while 1 in working:
-				# Run the benchmark for the proposed levels
-				for levels in args.levelscore:
-					# Check if level is still giving valid results
-					if working[levels] == 0:
-						continue
-					# Set Core performance level to the one to be tested
-					if editPerformanceLevel("core", int(levels)) == False:
-						working[levels] = 0
-						continue
-					# Set Memory performance level to the highest
-					if editPerformanceLevel("mem", 3) == False:
-						working[levels] = 0
-						continue
-					# Get current DVFS settings - to make sure it was correctly applyed
-					if currentPerfLevel() != (int(levels), 3):
-						working[levels] = 0
-						continue
-
-					# Run the benchmark
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency")
-					runBashCommand(commandBenchmark)
-
-					# Write GPU Temp to end of output file
-					appendCurrentTemp(commandBenchmark)
-					
-				# Overclock all levels Core by 10Hz
-				CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
-				for levels in range(0,8):
-					if setPerformanceLevel("core", levels) == False:
-						working[levels] = 0
-
-
-# Exploration of Core
-elif args.c == 1:
-	print("Exploration of Core")
 	# Run the benchmark for the proposed levels
 	for levels in args.levelscore:
 		working = [1] * 8
@@ -292,13 +213,6 @@ elif args.c == 1:
 
 					# Write GPU Temp to end of output file
 					appendCurrentTemp(commandBenchmark)
-					
-					# Undervolt Core by 10mV
-					CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
-					for levels in range(0,8):
-						if setPerformanceLevel("core", levels) == False:
-							working[levels] = 0
-
 				else:
 					print("	Exploration of freq")
 		
@@ -309,80 +223,66 @@ elif args.c == 1:
 					# Write GPU Temp to end of output file
 					appendCurrentTemp(commandBenchmark)
 					
-					# Overclock all levels Core by 10Hz
-					CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
-					for levels in range(0,8):
-						if setPerformanceLevel("core", levels) == False:
-							working[levels] = 0
+			if args.v == 1:
+				# Undervolt Core by 10mV
+				CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
+				for levels in range(0,8):
+					if setPerformanceLevel("core", levels) == False:
+						working[levels] = 0
+			else
+				# Overclock all levels Core by 10Hz
+				CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
+				for levels in range(0,8):
+					if setPerformanceLevel("core", levels) == False:
+						working[levels] = 0
 
 
 # Exploration of Memory
 elif args.m == 1:
 	print("Exploration of Memory")
-	if args.v == 1:
-		print("	Exploration of volt")
-		working = [1] * 4
-		while 1 in working:
-			# Run the benchmark for the proposed levels
-			for levels in args.levelsmemory:
-				# Check if level is still giving valid results
-				if working[levels] == 0:
-					continue
-				# Set Core performance level to the one to be tested
-				if editPerformanceLevel("core", 7) == False:
-					working[levels] = 0
-					continue
-				# Set Memory performance level to the highest
-				if editPerformanceLevel("mem", int(levels)) == False:
-					working[levels] = 0
-					continue
-				# Get current DVFS settings - to make sure it was correctly applyed
-				if currentPerfLevel() != (7, int(levels)):
-					working[levels] = 0
-					continue
+	working = [1] * 4
+	while 1 in working:
+		# Run the benchmark for the proposed levels
+		for levels in args.levelsmemory:
+			# Check if level is still giving valid results
+			if working[levels] == 0:
+				continue
+			# Set Core performance level to the one to be tested
+			if editPerformanceLevel("core", 7) == False:
+				working[levels] = 0
+				continue
+			# Set Memory performance level to the highest
+			if editPerformanceLevel("mem", int(levels)) == False:
+				working[levels] = 0
+				continue
+			# Get current DVFS settings - to make sure it was correctly applyed
+			if currentPerfLevel() != (7, int(levels)):
+				working[levels] = 0
+				continue
 
+			if args.v == 1:
+				print("	Exploration of volt")
 				# Run the benchmark
 				commandBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Voltage")
 				runBashCommand(commandBenchmark)
 
 				# Write GPU Temp to end of output file
 				appendCurrentTemp(commandBenchmark)
-				
-			# Undervolt Memory by 10mV
-			MemoryVoltage = [int(volt) - 10 for volt in MemoryVoltage]
-			for levels in range(0,4):
-				if setPerformanceLevel("mem", levels) == False:
-					working[levels] = 0
-
-	else:
-		print("	Exploration of freq")
-		working = [1] * 4
-		while 1 in working:
-			# Run the benchmark for the proposed levels
-			for levels in args.levelsmemory:
-				# Check if level is still giving valid results
-				if working[levels] == 0:
-					continue
-				# Set Core performance level to the one to be tested
-				if editPerformanceLevel("core", 7) == False:
-					working[levels] = 0
-					continue
-				# Set Memory performance level to the highest
-				if editPerformanceLevel("mem", int(levels)) == False:
-					working[levels] = 0
-					continue
-				# Get current DVFS settings - to make sure it was correctly applyed
-				if currentPerfLevel() != (7, int(levels)):
-					working[levels] = 0
-					continue
-
+			else:
 				# Run the benchmark
 				commandBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Frequency")
 				runBashCommand(commandBenchmark)
 				
 				# Write GPU Temp to end of output file
 				appendCurrentTemp(commandBenchmark)
-				
+
+		if args.v == 1:
+			# Undervolt Memory by 10mV
+			MemoryVoltage = [int(volt) - 10 for volt in MemoryVoltage]
+			for levels in range(0,4):
+				if setPerformanceLevel("mem", levels) == False:
+					working[levels] = 0
+		else:
 			# Overclock Memory by 10Hz
 			MemoryFreq = [int(freq) + 10 for freq in MemoryFreq]
 			for levels in range(0,4):
