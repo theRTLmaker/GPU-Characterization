@@ -1,0 +1,8 @@
+FILE=
+eventperformance_MemCpy_[size]
+
+OUTPUT=
+MemCpyTime [MemCpyTime] ms
+Result: [result]
+Execution: [executionNumber]
+Temperature: [temperature]c

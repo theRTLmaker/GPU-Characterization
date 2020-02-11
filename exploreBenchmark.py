@@ -37,10 +37,11 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
 	"""
 	print("Running %s" % (bashCommand))
 	output_file = open(filePath,'a')
-	output_file.write("#################################################")
-	output_file.write("Execution: " + str(execution))
-	output_file.write("#################################################")
-	output_file.write("")
+	output_file.write("\n")
+	output_file.write("#################################################\n")
+	output_file.write("Execution: " + str(execution) + "\n")
+	output_file.write("#################################################\n")
+	output_file.write("\n")
 	process = subprocess.run(bashCommand.split(), stdout=output_file, stderr=output_file, check=True, text=True)
 	return process
 
@@ -169,8 +170,8 @@ group.add_argument('-f', const=1, default=0, help="Performs exploration of frequ
 parser.add_argument('-lc', '--levelscore', help="Performance Levels to be explored on Core", nargs='+', type=int, choices=range(0, 8))
 parser.add_argument('-lm', '--levelsmemory', help="Performance Levels to be explored on Memory", nargs='+', type=int, choices=range(0, 4))
 parser.add_argument('-t', '--tries', default=10, help="Number of times to perform the benchmark", type=int, choices=range(0, 51))
-
 args = parser.parse_args()
+
 if args.levelscore == None:
 	args.levelscore = list(range(0,8))
 

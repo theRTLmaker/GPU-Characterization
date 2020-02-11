@@ -104,7 +104,6 @@ int main(int argc, char *argv[]){
 
 	hipDeviceProp_t deviceProp;
 
-	printf("Usage: %s [device_num] [metric_name]\n", argv[0]);
 	int ntries;
 	unsigned int size, sizeB; 
 	if (argc > 2) {
@@ -116,7 +115,7 @@ int main(int argc, char *argv[]){
 		ntries = 1;
 	}
 	else {
-		printf("No size given!!!\n");
+		printf("Usage: %s [buffer size] [ntries]\n", argv[0]);
 		exit(1);
 	}
 
@@ -189,8 +188,8 @@ int main(int argc, char *argv[]){
 
 	// Resets the DVFS Settings
 	int status = system("rocm-smi -r");
-	status = system("../DVFS -P 7");
-	status = system("../DVFS -p 3");
+	status = system("./DVFS -P 7");
+	status = system("./DVFS -p 3");
 
 	for (i=0;i<1;i++){
 		runbench_warmup();
@@ -220,8 +219,9 @@ int main(int argc, char *argv[]){
 	for (i = 0; i < size-1; i++) {
 		sum_received += hostOut[i];
 	}
+	printf("Result: ");
 	if(sum == sum_received && sum == hostOut[size-1]) {
-		printf("Correct!\n");
+		printf("Correct\n");
 	}
 	else {
 		printf("Incorrect\n");
