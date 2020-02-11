@@ -88,7 +88,6 @@ fi
 # GPU Core
 if [ $SetLevelGPU != -1 ]
 then
-	rocm-smi --setperflevel manual
 	echo "Setting GPU Core level to $SetLevelGPU"
 	rocm-smi --setsclk $SetLevelGPU
 fi
@@ -96,7 +95,6 @@ fi
 # GPU Core
 if [ $SetLevelMEMORY != -1 ]
 then
-	rocm-smi --setperflevel manual
 	echo "Setting GPU Memory level to $SetLevelMEMORY"
 	rocm-smi --setmclk $SetLevelMEMORY
 fi

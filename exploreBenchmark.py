@@ -2,22 +2,47 @@ import argparse
 import subprocess
 from pathlib import Path
 import os
+import re
 
 CoreFreq = []
 CoreVoltage = []
 MemoryFreq = []
 MemoryVoltage = []
 
-def benchmarkCommand(benchmark, folder, levelCore, levelMem, typeEx, explore, execution):
+def benchmarkCommand(benchmark, folder, levelCore, levelMem, typeEx, explore):
 	global CoreFreq
 	global CoreVoltage
 	global MemoryFreq
 	global MemoryVoltage
-	name = str(benchmark[0]).replace(str(folder) + '/', '')
-	name = name[:name.rfind('.')]
+	name = benchmark.copy()
+	name[0] = str(benchmark[0]).replace(str(folder) + '/', '')
+	name = '_'.join(name)
+	
 	benchmark = ' '.join(benchmark)
 
-	return str(benchmark) + " 2>&1 | tee " + str(folder) + "/Results/" + name + "-" + str(typeEx) + "-" + str(explore) + "-" + "Core-" + str(levelCore) + "-" + str(CoreFreq[levelCore]) + '-' + str(CoreVoltage[levelCore]) + "-Memory-" + str(levelMem) + '-' + str(MemoryFreq[levelMem]) + '-' + str(MemoryVoltage[levelMem]) + "-execution-" + str(execution) + ".txt"
+	command = str(benchmark)
+	file = str(folder) + "/Results/" + name + "-" + str(typeEx) + "-" + str(explore) + "-" + "Core-" + str(levelCore) + "-" + str(CoreFreq[levelCore]) + '-' + str(CoreVoltage[levelCore]) + "-Memory-" + str(levelMem) + '-' + str(MemoryFreq[levelMem]) + '-' + str(MemoryVoltage[levelMem]) + ".txt"
+
+	return command, file
+
+def runBashCommandOutputToFile(bashCommand, filePath, execution):
+	"""Runs a bash command and outputs the process stdout and stderr to file
+
+	Args:
+		bashCommand: Command to be run
+		filePath: Path of the output file
+
+	Returns:
+		The resulting process
+	"""
+	print("Running %s" % (bashCommand))
+	output_file = open(filePath,'a')
+	output_file.write("#################################################")
+	output_file.write("Execution: " + str(execution))
+	output_file.write("#################################################")
+	output_file.write("")
+	process = subprocess.run(bashCommand.split(), stdout=output_file, stderr=output_file, check=True, text=True)
+	return process
 
 def runBashCommand(bashCommand):
 	"""Runs a bash command
@@ -28,7 +53,8 @@ def runBashCommand(bashCommand):
 	Returns:
 		The resulting process
 	"""
-	process = subprocess.run(bashCommand.split(), stdout=subprocess.PIPE, check=True, text=True)
+	print("Running %s" % (bashCommand))
+	process = subprocess.run(bashCommand.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
 	return process
 
 def runDVFSscript(command):
@@ -41,7 +67,7 @@ def runDVFSscript(command):
 		The resulting process
 	"""
 	script = "./DVFS " + str(command)
-	process = subprocess.run(script.split(), stdout=subprocess.PIPE, check=True, text=True)
+	process = runBashCommand(script)
 	return process
 
 def setPerformanceLevel(source, level):
@@ -114,22 +140,21 @@ def currentPerfLevel():
 	mem = -1
 	line = result.stdout.split('\n')
 	line = line[5].split(" ")
-	core = line[10].replace("Mhz", '')
-	mem = line[12].replace("Mhz", '')
-
+	# Find indices of Core and Mem frequency
+	indices = [i for i, s in enumerate(line) if 'Mhz' in s]
+	core = line[indices[0]].replace("Mhz", '')
+	mem = line[indices[1]].replace("Mhz", '')
 	return CoreFreq.index(core), MemoryFreq.index(mem)
 
 def appendCurrentTemp(file):
 	result = runBashCommand("rocm-smi")
-	line = result.stdout.split('\n')
-	temp = line[5].split(" ")[4]
+	line = result.stdout.split('\n')[5]
+	# Find temperature
+	temp = re.search("..\..c", line).group()
 
-	file = file.split("tee ", 1)[1]
-	print(file)
-	exit()
-
-	with open(file, "a") as benchFile:
-		benchFile.write("appended text")
+	print("File " , file)
+	with open(file, "a+") as benchFile:
+		benchFile.write("Temperature: " + str(temp))
 
 	return temp
 
@@ -153,14 +178,14 @@ if args.levelsmemory == None:
 	args.levelsmemory = list(range(0,4))
 
 if args.c == 1:
-	print("Exploration of Core", end =" ")
+	print("Exploration of Core -", end =" ")
 if args.m == 1:
-	print("Exploration of Memory", end =" ")
-print()
+	print("Exploration of Memory -", end =" ")
 if args.v == 1:
 	print("volt", end =" ")
 if args.f == 1:
 	print("frequency")
+print()
 
 # Checks if the benchmark exists and create a Results folder
 folder = str(args.benchmark[0][:args.benchmark[0].rfind('/')])
@@ -217,11 +242,11 @@ if args.c == 1 and args.m == 1:
 			if working[levels] == 0:
 				continue
 			# Set Core performance level to the one to be tested
-			if editPerformanceLevel("core", int(levels)) == False:
+			if setPerformanceLevel("core", int(levels)) == False:
 				working[levels] = 0
 				continue
 			# Set Memory performance level to the highest
-			if editPerformanceLevel("mem", 3) == False:
+			if setPerformanceLevel("mem", 3) == False:
 				working[levels] = 0
 				continue
 			# Get current DVFS settings - to make sure it was correctly applyed
@@ -229,23 +254,23 @@ if args.c == 1 and args.m == 1:
 				working[levels] = 0
 				continue
 			# Run the benchmark multiple times
-			for i in range(0, args.t):
+			for i in range(0, args.tries):
 				# Command to be launch
 				if args.v == 1:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage")
 				else:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency")
 
 				# Run the benchmark
-				runBashCommand(commandBenchmark)
+				runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
 
 				# Write GPU Temp to end of output file
-				appendCurrentTemp(commandBenchmark)
+				appendCurrentTemp(fileBenchmark)
 				
 		if args.v == 1:
 			# Undervolt Core by 10mV
 			CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
-		else
+		else:
 			# Overclock all levels Core by 10Hz
 			CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
 
@@ -269,11 +294,11 @@ elif args.c == 1:
 			if working[levels] == 0:
 				continue
 			# Set Core performance level to the one to be tested
-			if editPerformanceLevel("core", int(levels)) == False:
+			if setPerformanceLevel("core", int(levels)) == False:
 				working[levels] = 0
 				continue
 			# Set Memory performance level to the highest
-			if editPerformanceLevel("mem", 3) == False:
+			if setPerformanceLevel("mem", 3) == False:
 				working[levels] = 0
 				continue
 			# Get current DVFS settings - to make sure it was correctly applyed
@@ -281,29 +306,29 @@ elif args.c == 1:
 				working[levels] = 0
 				continue
 			# Run the benchmark multiple times
-			for i in range(0, args.t):
+			for i in range(0, args.tries):
 				# Command to be launch
 				if args.v == 1:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage")
 				else:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency")
 
 				# Run the benchmark
-				runBashCommand(commandBenchmark)
+				runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
 
 				# Write GPU Temp to end of output file
-				appendCurrentTemp(commandBenchmark)
+				appendCurrentTemp(fileBenchmark)
 				
 		if args.v == 1:
 			# Undervolt Core by 10mV
 			CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
-		else
+		else:
 			# Overclock all levels Core by 10Hz
 			CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
 
 		# Apply new Power Table Settings
 		for levels in range(0,8):
-			if setPerformanceLevel("core", levels) == False:
+			if editPerformanceLevel("core", levels, CoreFrequency[levels], CoreVoltage[levels]) == False:
 				working[levels] = 0
 
 
@@ -311,41 +336,48 @@ elif args.c == 1:
 elif args.m == 1:
 	# Activates intended performance levels
 	working = [0] * 4
-	for i in args.levelscore:
+	for i in args.levelsmemory:
 		working[i] = 1
 
 	while 1 in working:
 		# Run the benchmark for the proposed levels
 		for levels in args.levelsmemory:
+			print("levels " + str(levels))
 			# Check if level is still giving valid results
 			if working[levels] == 0:
 				continue
 			# Set Core performance level to the one to be tested
-			if editPerformanceLevel("core", 7) == False:
+			if setPerformanceLevel("core", 7) == False:
+				print("	Not able to select core level.")
 				working[levels] = 0
 				continue
 			# Set Memory performance level to the highest
-			if editPerformanceLevel("mem", int(levels)) == False:
+			if setPerformanceLevel("mem", int(levels)) == False:
+				print("	Not able to select memory level.")
 				working[levels] = 0
 				continue
 			# Get current DVFS settings - to make sure it was correctly applyed
-			if currentPerfLevel() != (7, int(levels)):
+			cur = currentPerfLevel()
+			if cur  != (7, int(levels)):
+				print("	Selected Performance Levels don't match current ones.")
+				print("	", end=" ")
+				print(cur, end=" ")
+				print("!= (7, " + str(levels) + ")")
 				working[levels] = 0
 				continue
 
 			# Run the benchmark multiple times
-			for i in range(0, args.t):
+			for i in range(0, args.tries):
 				# Command to be launch
 				if args.v == 1:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Voltage", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Voltage")
 				else:
-					commandBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Frequency", i)
+					commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Frequency")
 
 				# Run the benchmark
-				runBashCommand(commandBenchmark)
-				
+				runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
 				# Write GPU Temp to end of output file
-				appendCurrentTemp(commandBenchmark)
+				appendCurrentTemp(fileBenchmark)
 
 		if args.v == 1:
 			# Undervolt Memory by 10mV
@@ -356,8 +388,14 @@ elif args.m == 1:
 
 		# Apply new Power Table Settings
 		for levels in range(0,4):
-			if setPerformanceLevel("mem", levels) == False:
+			if editPerformanceLevel("mem", levels, MemoryFreq[levels], MemoryVoltage[levels]) == False:
 				working[levels] = 0
 
 else:
 	print("No indication of exploration given [v:voltage, f:frequency]")
+
+# GPU fan automatic
+result = runBashCommand("rocm-smi --resetfans")
+if "Successfully" not in result.stdout:
+	print("Not able to set fan")
+	exit()
