@@ -2,7 +2,6 @@ FILE=
 eventperformance_MemCpy_[size]
 
 OUTPUT=
-MemCpyTime [MemCpyTime] ms
-Result: [result]
-Execution: [executionNumber]
-Temperature: [temperature]c
+MemCpyTime [MemCpy Time] ms
+Result: [Result]
+Temperature: [Temperature] c

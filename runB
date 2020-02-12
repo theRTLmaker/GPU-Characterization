@@ -1,0 +1,21 @@
+python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 1024 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 2048 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 4096 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 8192 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 16384 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 32768 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 65536 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 131072 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 262144 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 524288 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 1048576 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 2097152 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 4194304 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 8388608 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 16777216 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 33554432 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 67108864 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 134217728 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 268435456 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 536870912 -m -v -t 10
+# python exploreBenchmark.py -b MemCpy/eventperformance_MemCpy 1073741824 -m -v -t 10

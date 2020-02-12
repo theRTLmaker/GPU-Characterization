@@ -155,7 +155,7 @@ def appendCurrentTemp(file):
 
 	print("File " , file)
 	with open(file, "a+") as benchFile:
-		benchFile.write("Temperature: " + str(temp))
+		benchFile.write("Temperature: " + str(temp.replace("c", " c")))
 
 	return temp
 

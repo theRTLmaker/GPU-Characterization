@@ -1,9 +1,9 @@
 import argparse
 import re
 import glob
+import pandas as pd
 
 # import xlsxwriter as xl
-# import pandas as pd
 # import numpy as  np
 # from vincent.colors import brews
 
@@ -32,9 +32,7 @@ while True:
 					break
 				if re.search("\[(.*?)\]", outputLine) != None:
 					expectedOutput.append(outputLine)
-
 			break
-
 
 fileNameVars = re.findall(r"\[(.*?)\]", fileConvention) +  ['target', 'object of study', 'core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage']
 
@@ -44,12 +42,26 @@ while True:
 		break
 	fileConvention = fileConvention[0 : match.span()[0] : ] + "(.*?)" + fileConvention[match.span()[1] : :]
 
+outputNameVars = []
+for idx, line in enumerate(expectedOutput):
+	match =  re.search(r"\[(.*?)\]", line)
+	outputNameVars.append(match.groups()[0])
+	expectedOutput[idx] = line[0 : match.span()[0] : ] + "(.*?)" + line[match.span()[1] : :]
+
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 
-results = {}
+Benchmark = {}
+
+numberOfExecutions = 0
 
 for f in files:	
+	regex = re.compile(fileConvention[:-1] + "-")
+	benchmarkType = []
+	for i in regex.match(f).groups():
+		benchmarkType.append(i)
+	benchmarkType = "-".join(benchmarkType)
+
 	regex = re.compile(fileConvention[:-1] + "-(.*?)-(.*?)-Core-(.*?)-(.*?)-(.*?)-Memory-(.*?)-(.*?)-(.*?).txt")
 	fileNameValues = []
 	for i in regex.match(f).groups():
@@ -57,127 +69,113 @@ for f in files:
 			fileNameValues.append(int(i))
 		except:
 			fileNameValues.append(i)
-
 	params = dict(zip(fileNameVars, fileNameValues))
 
-	print(params)
-	exit()
-
-	
-
-
-	
 	with open(f, "r") as search:
-		inf_time_next = 0
-		for line in search:
-			if inf_time_next == 1:
-				inf_time_next = 0
-				params['inf_time ' + levelanalysed] = float(line)
-			elif "Test set" in line:
-				line = line.split()
-				params['loss ' + levelanalysed] = float(line[4].strip(","))
-				line = line[6].split("/")
-				params['acc ' + levelanalysed] = (float(line[0])/float(line[1]))*100
-			elif "Total time to Inference" in line:
-				inf_time_next = 1
-			elif "At current frequency" in line:
-				line = line.strip(":")
-				line = line.split()
-				params['Average Power [W] ' + levelanalysed] = float(line[7])
-				params['Max Power [W] ' + levelanalysed] = float(line[11])
-				params['Energy [J] ' + levelanalysed] = float(line[23])
-				params['Sampling Duration [ms] ' + levelanalysed] = float(line[15])
-				params['GPU Active Duration [ms] ' + levelanalysed] = float(line[20])
-	
+		for idx, regex in enumerate(expectedOutput):
+			numberOfExecutions = 0
+			regexx = re.compile(regex)
+			for line in search:
+				value = regexx.search(line)
+				if value != None:
+					value = value.group()
+					for word in regex.split(" "):
+						value = value.replace(word, "")
+					try:
+						params[outputNameVars[idx] + " " + str(numberOfExecutions)] = float(value)
+					except:
+						value = value.replace("\n", "")
+						params[outputNameVars[idx] + " " + str(numberOfExecutions)] = value.replace(" ", "")
+					numberOfExecutions = numberOfExecutions + 1
+			search.seek(0)
 
-	key = str(params["LEVEL"]) + str(params["GPUfreq"]) + str(params["GPUvolt"])
-	if key in results:
-		results[key] = {**results[key], **params}
-	else:
-		results[key] = params
+	if benchmarkType not in Benchmark:
+		Benchmark[benchmarkType] = []
 
-results = [value for value in results.values()]
+	Benchmark[benchmarkType].append(params)
 
 
-		 
-order = ['LEVEL', 'GPUfreq', 'GPUvolt',
-		'accuracy0', 'accuracy1', 'accuracy2', 'accuracy3', 'accuracy4', 'accuracy5', 'accuracy6', 'accuracy7', 'accuracy8', 'accuracy9', 'accuracy10', 'accuracy11', 'accuracy12', 'accuracy13', 'accuracy14', 'accuracy15', 'accuracy16', 'accuracy17', 'accuracy18', 'accuracy19',  
-		'avg_loss0', 'avg_loss1', 'avg_loss2', 'avg_loss3', 'avg_loss4', 'avg_loss5', 'avg_loss6', 'avg_loss7', 'avg_loss8', 'avg_loss9', 'avg_loss10', 'avg_loss11', 'avg_loss12', 'avg_loss13', 'avg_loss14', 'avg_loss15', 'avg_loss16', 'avg_loss17', 'avg_loss18', 'avg_loss19',
-		'tot_times0', 'tot_times1', 'tot_times2', 'tot_times3', 'tot_times4', 'tot_times5', 'tot_times6', 'tot_times7', 'tot_times8', 'tot_times9', 'tot_times10', 'tot_times11', 'tot_times12', 'tot_times13', 'tot_times14', 'tot_times15', 'tot_times16', 'tot_times17', 'tot_times18', 'tot_times19',
-		'Average Power [W]', 'Max Power [W]', 'Energy [J]', 'Sampling Duration [ms]', 'GPU Active Duration [ms]',
-		'inf_time', 'inf_time 0', 'inf_time 1', 'inf_time 2', 'inf_time 3', 'inf_time 4', 'inf_time 5', 'inf_time 6', 'inf_time 7', 
-		'acc 0', 'acc 1', 'acc 2', 'acc 3', 'acc 4', 'acc 5', 'acc 6', 'acc 7', 'loss 0', 'loss 1', 'loss 2', 'loss 3', 'loss 4', 'loss 5', 'loss 6', 'loss 7', 
-		'Average Power [W] 0', 'Average Power [W] 1', 'Average Power [W] 2', 'Average Power [W] 3', 'Average Power [W] 4', 'Average Power [W] 5', 'Average Power [W] 6', 'Average Power [W] 7', 
-		'Max Power [W] 0', 'Max Power [W] 1', 'Max Power [W] 2', 'Max Power [W] 3', 'Max Power [W] 4', 'Max Power [W] 5', 'Max Power [W] 6', 'Max Power [W] 7', 
-		'Energy [J] 0', 'Energy [J] 1', 'Energy [J] 2', 'Energy [J] 3', 'Energy [J] 4', 'Energy [J] 5', 'Energy [J] 6', 'Energy [J] 7', 
-		'Sampling Duration [ms] 0', 'Sampling Duration [ms] 1', 'Sampling Duration [ms] 2', 'Sampling Duration [ms] 3', 'Sampling Duration [ms] 4', 'Sampling Duration [ms] 5', 'Sampling Duration [ms] 6', 'Sampling Duration [ms] 7', 
-		'GPU Active Duration [ms] 0','GPU Active Duration [ms] 1','GPU Active Duration [ms] 2','GPU Active Duration [ms] 3','GPU Active Duration [ms] 4','GPU Active Duration [ms] 5','GPU Active Duration [ms] 6','GPU Active Duration [ms] 7'
-		]
-
-MNIST_dt = pd.DataFrame.from_dict(results)
-MNIST_dt = MNIST_dt[order]
-MNIST_dt.sort_values(by=['LEVEL', 'GPUfreq', 'GPUvolt' ], ascending=[True, False, False] ,inplace=True)
-MNIST_dt.dropna(inplace=True)
-
-# Adds delta computation
-MNIST_dt['delta_accuracy'] = np.nan
-MNIST_dt['delta_max_power'] = np.nan
-MNIST_dt['delta_avg_power'] = np.nan
-MNIST_dt['delta_energy'] = np.nan
-MNIST_dt['delta_time'] = np.nan
-
-cur_level = -1
-default_time = 0
-default_acc = 0
-default_max_power = 0
-default_avg_power = 0
-default_energy = 0
-
-for index, row in MNIST_dt.iterrows():
-	if cur_level == row['LEVEL']:
-		MNIST_dt.at[index, 'delta_accuracy'] = ((row['accuracy19'] - default_acc)/default_acc)*100
-		MNIST_dt.at[index, 'delta_max_power'] = ((row['Max Power [W]'] - default_max_power)/default_max_power)*100
-		MNIST_dt.at[index, 'delta_avg_power'] = ((row['Average Power [W]'] - default_avg_power)/default_avg_power)*100
-		MNIST_dt.at[index, 'delta_energy'] = ((row['Energy [J]'] - default_energy)/default_energy)*100
-		MNIST_dt.at[index, 'delta_time'] = ((row['tot_times19'] - default_time)/default_time)*100
-	else:
-		cur_level = row['LEVEL']
-		default_time = row['tot_times19']
-		default_acc = row['accuracy19']
-		default_max_power = row['Max Power [W]']
-		default_avg_power = row['Average Power [W]']
-		default_energy = row['Energy [J]']
-
-		MNIST_dt.at[index, 'delta_accuracy'] = 0
-		MNIST_dt.at[index, 'delta_max_power'] = 0
-		MNIST_dt.at[index, 'delta_avg_power'] = 0
-		MNIST_dt.at[index, 'delta_energy'] = 0
-		MNIST_dt.at[index, 'delta_time'] = 0
-
-	MNIST_dt.at[index, 'delta acc 0'] = ((row['acc 0'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 1'] = ((row['acc 1'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 2'] = ((row['acc 2'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 3'] = ((row['acc 3'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 4'] = ((row['acc 4'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 5'] = ((row['acc 5'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 6'] = ((row['acc 6'] - row['accuracy19'])/row['accuracy19'])*100
-	MNIST_dt.at[index, 'delta acc 7'] = ((row['acc 7'] - row['accuracy19'])/row['accuracy19'])*100
-
-print(MNIST_dt)
-
-
-# Count the number of entries per level
-numberOfEntries = np.zeros(8)
-for i in range(0,8):
-	numberOfEntries[i] = len(MNIST_dt[MNIST_dt['LEVEL'] == i])
-
+order = ['core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage']
+for value in outputNameVars:
+	for i in range(numberOfExecutions):
+		order.append(value + " " + str(i))
 
 # Create a Pandas Excel writer using XlsxWriter as the engine.
-excel_file = '/homelocal/fmendeslocal/MNISTresults.xlsx'
+excel_file = "./" + str(args.path[0]) + 'results.xlsx'
 sheet_name = 'Data'
 
 writer = pd.ExcelWriter(excel_file, engine='xlsxwriter')
-MNIST_dt.to_excel(writer, sheet_name=sheet_name)
+
+Benchmark_dt = {}
+for key, value in Benchmark.items():
+	Benchmark_dt[key] = pd.DataFrame.from_dict(Benchmark[key])
+	Benchmark_dt[key] = Benchmark_dt[key][order]
+	Benchmark_dt[key].sort_values(by=['core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage'], ascending=[True, False, False, True, False, False] ,inplace=True)
+	Benchmark_dt[key].dropna(inplace=True)
+
+	print(Benchmark_dt[key])
+
+	Benchmark_dt[key].to_excel(writer, sheet_name=str(key))
+
+writer.save()
+exit()
+
+# Adds delta computation
+# result_dt['delta_accuracy'] = np.nan
+# result_dt['delta_max_power'] = np.nan
+# result_dt['delta_avg_power'] = np.nan
+# result_dt['delta_energy'] = np.nan
+# result_dt['delta_time'] = np.nan
+
+# cur_level = -1
+# default_time = 0
+# default_acc = 0
+# default_max_power = 0
+# default_avg_power = 0
+# default_energy = 0
+
+# for index, row in result_dt.iterrows():
+# 	if cur_level == row['LEVEL']:
+# 		result_dt.at[index, 'delta_accuracy'] = ((row['accuracy19'] - default_acc)/default_acc)*100
+# 		result_dt.at[index, 'delta_max_power'] = ((row['Max Power [W]'] - default_max_power)/default_max_power)*100
+# 		result_dt.at[index, 'delta_avg_power'] = ((row['Average Power [W]'] - default_avg_power)/default_avg_power)*100
+# 		result_dt.at[index, 'delta_energy'] = ((row['Energy [J]'] - default_energy)/default_energy)*100
+# 		result_dt.at[index, 'delta_time'] = ((row['tot_times19'] - default_time)/default_time)*100
+# 	else:
+# 		cur_level = row['LEVEL']
+# 		default_time = row['tot_times19']
+# 		default_acc = row['accuracy19']
+# 		default_max_power = row['Max Power [W]']
+# 		default_avg_power = row['Average Power [W]']
+# 		default_energy = row['Energy [J]']
+
+# 		result_dt.at[index, 'delta_accuracy'] = 0
+# 		result_dt.at[index, 'delta_max_power'] = 0
+# 		result_dt.at[index, 'delta_avg_power'] = 0
+# 		result_dt.at[index, 'delta_energy'] = 0
+# 		result_dt.at[index, 'delta_time'] = 0
+
+# 	result_dt.at[index, 'delta acc 0'] = ((row['acc 0'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 1'] = ((row['acc 1'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 2'] = ((row['acc 2'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 3'] = ((row['acc 3'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 4'] = ((row['acc 4'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 5'] = ((row['acc 5'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 6'] = ((row['acc 6'] - row['accuracy19'])/row['accuracy19'])*100
+# 	result_dt.at[index, 'delta acc 7'] = ((row['acc 7'] - row['accuracy19'])/row['accuracy19'])*100
+
+
+
+
+# Count the number of entries per level
+# numberOfEntries = np.zeros(8)
+# for i in range(0,8):
+# 	numberOfEntries[i] = len(result_dt[result_dt['LEVEL'] == i])
+
+
+
+
+
 
 # Access the XlsxWriter workbook and worksheet objects from the dataframe.
 workbook = writer.book
@@ -187,7 +185,7 @@ actual_line = 2
 
 # Run all performance values
 for i in range(0,8):
-	nameF = MNIST_dt.iloc[actual_line-2, 1]
+	nameF = result_dt.iloc[actual_line-2, 1]
 
 	########### TIME CHART ################
 
@@ -380,7 +378,7 @@ for i in range(0,8):
 actual_line = 2
 
 for i in range(0,8):
-	nameF = MNIST_dt.iloc[actual_line-2, 1]
+	nameF = result_dt.iloc[actual_line-2, 1]
 	worksheet = workbook.add_worksheet("Level" + str(i))
 	for j in range(0,8):
 		worksheet.write(0,j,j)
