@@ -2,6 +2,6 @@ FILE=
 eventperformance_MemCpy_[size]
 
 OUTPUT=
-MemCpyTime [MemCpy Time] ms
+MemCpyTime [MemCpy Time (average, min, max)] ms
 Result: [Result]
 Temperature: [Temperature] c

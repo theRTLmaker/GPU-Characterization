@@ -13,19 +13,24 @@ parser.add_argument('-p', '--path', metavar='path', type=str, help="Path to fold
 parser.add_argument('-c', '--config', metavar='path', type=str, help="Config file", required=True, nargs='+')
 args = parser.parse_args()
 
+# List of entries to find on the output file
 expectedOutput = []
+
 # Parse config file
 config_file = open(" ".join(args.config), "r")
 while True:
 	line = config_file.readline()
 	if not line:
 		break
+
+	# Check the type of content of the output file
 	parseType = re.search("(.*?)\=", line)
 	if parseType != None:
-		parseType = parseType.group(0)
-		if parseType == "FILE=":
+		# Get the information written on the name of the file
+		if parseType.group(0) == "FILE=":
 			fileConvention = str(args.path[0]) + str(config_file.readline())
-		elif parseType == "OUTPUT=":
+		# Get the expected output lines
+		elif parseType.group(0) == "OUTPUT=":
 			while True:
 				outputLine = config_file.readline()
 				if not outputLine:
@@ -34,34 +39,48 @@ while True:
 					expectedOutput.append(outputLine)
 			break
 
+# List of content on the file name
 fileNameVars = re.findall(r"\[(.*?)\]", fileConvention) +  ['target', 'object of study', 'core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage']
 
+# Create the regular expressions patterns to get the data from the filename
 while True:
 	match =  re.search(r"\[(.*?)\]", fileConvention)
 	if match == None:
 		break
 	fileConvention = fileConvention[0 : match.span()[0] : ] + "(.*?)" + fileConvention[match.span()[1] : :]
 
+# Name of the variables to extract from the file output
 outputNameVars = []
+# Additional information for post processing data analysis
+varAnalysis = {}
 for idx, line in enumerate(expectedOutput):
 	match =  re.search(r"\[(.*?)\]", line)
-	outputNameVars.append(match.groups()[0])
 	expectedOutput[idx] = line[0 : match.span()[0] : ] + "(.*?)" + line[match.span()[1] : :]
+
+	outputNameVars.append(re.sub(r'\([^)]*\)', '', match.groups()[0]))
+	match =  re.search(r"\((.*?)\)", match.groups()[0])
+	if match != None:
+		varAnalysis[outputNameVars[-1]] = str(match.groups()[0]).replace(" ", "").split(",")
 
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 
+# Dictionary holding a pandas dataframe for every benchmark type
 Benchmark = {}
 
+# Number of executions of every benchmark
 numberOfExecutions = 0
 
+# Run throw all the output files
 for f in files:	
+	# Get the benchmark type
 	regex = re.compile(fileConvention[:-1] + "-")
 	benchmarkType = []
 	for i in regex.match(f).groups():
 		benchmarkType.append(i)
 	benchmarkType = "-".join(benchmarkType)
 
+	# Get the data from the filename
 	regex = re.compile(fileConvention[:-1] + "-(.*?)-(.*?)-Core-(.*?)-(.*?)-(.*?)-Memory-(.*?)-(.*?)-(.*?).txt")
 	fileNameValues = []
 	for i in regex.match(f).groups():
@@ -71,6 +90,7 @@ for f in files:
 			fileNameValues.append(i)
 	params = dict(zip(fileNameVars, fileNameValues))
 
+	# Open the file and search for the output content
 	with open(f, "r") as search:
 		for idx, regex in enumerate(expectedOutput):
 			numberOfExecutions = 0
@@ -94,7 +114,7 @@ for f in files:
 
 	Benchmark[benchmarkType].append(params)
 
-
+# Order the of the dataframe collumns
 order = ['core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage']
 for value in outputNameVars:
 	for i in range(numberOfExecutions):
@@ -106,72 +126,51 @@ sheet_name = 'Data'
 
 writer = pd.ExcelWriter(excel_file, engine='xlsxwriter')
 
+# Create a pandas dataframe for every benchmark type
+# Sort the values by performance level, frequency and voltage for the core and memory
 Benchmark_dt = {}
 for key, value in Benchmark.items():
 	Benchmark_dt[key] = pd.DataFrame.from_dict(Benchmark[key])
 	Benchmark_dt[key] = Benchmark_dt[key][order]
 	Benchmark_dt[key].sort_values(by=['core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage'], ascending=[True, False, False, True, False, False] ,inplace=True)
 	Benchmark_dt[key].dropna(inplace=True)
+	Benchmark_dt[key].set_index(['core performance level', 'core frequency', 'core voltage', 'memory performance level', 'memory frequency', 'memory voltage'], inplace=True)
 
+	# Compute data analysis collumns
+	for var, analysisList in varAnalysis.items():
+		for analysis in analysisList:
+			# Gets the collums name of collumns containing the general name in var
+			cols = [col for col in Benchmark_dt[key] if var in col and not any(sb in col for sb in ["average", "median", "min", "max", "mode", "boolean", "delta"])]
+			if analysis == "average":
+				Benchmark_dt[key][str(var) + " " + str(analysis)] = Benchmark_dt[key][cols].mean(axis=1)
+				Benchmark_dt[key]["delta " + str(var) + " " + str(analysis)] = (Benchmark_dt[key].loc[(7, 1600, 1200, 3, 945, 1000), str(var) + " " + str(analysis)] - Benchmark_dt[key].loc[:, str(var) + " " + str(analysis)])/Benchmark_dt[key].loc[(7, 1600, 1200, 3, 945, 1000), str(var) + " " + str(analysis)]*100
+			elif analysis == "median":
+				Benchmark_dt[key][str(var) + " " + str(analysis)] = Benchmark_dt[key][cols].median(axis=1)
+			elif analysis == "min":
+				Benchmark_dt[key][str(var) + " " + str(analysis)] = Benchmark_dt[key][cols].min(axis=1)
+			elif analysis == "max":
+				Benchmark_dt[key][str(var) + " " + str(analysis)] = Benchmark_dt[key][cols].max(axis=1)
+			elif analysis == "mode":
+				Benchmark_dt[key][str(var) + " " + str(analysis)] = Benchmark_dt[key][cols].mode(axis=1)
+			elif analysis == "boolean":
+				# Benchmark_dt[key][str(var) + " " + str(analysis)] = 
+				continue
+			# Compute the delta
+			Benchmark_dt[key]["delta " + str(var) + " " + str(analysis)] = (Benchmark_dt[key].loc[(7, 1600, 1200, 3, 945, 1000), str(var) + " " + str(analysis)] - Benchmark_dt[key].loc[:, str(var) + " " + str(analysis)])/Benchmark_dt[key].loc[(7, 1600, 1200, 3, 945, 1000), str(var) + " " + str(analysis)]*100
+			
 	print(Benchmark_dt[key])
-
-	Benchmark_dt[key].to_excel(writer, sheet_name=str(key))
-
-writer.save()
-exit()
-
-# Adds delta computation
-# result_dt['delta_accuracy'] = np.nan
-# result_dt['delta_max_power'] = np.nan
-# result_dt['delta_avg_power'] = np.nan
-# result_dt['delta_energy'] = np.nan
-# result_dt['delta_time'] = np.nan
-
-# cur_level = -1
-# default_time = 0
-# default_acc = 0
-# default_max_power = 0
-# default_avg_power = 0
-# default_energy = 0
-
-# for index, row in result_dt.iterrows():
-# 	if cur_level == row['LEVEL']:
-# 		result_dt.at[index, 'delta_accuracy'] = ((row['accuracy19'] - default_acc)/default_acc)*100
-# 		result_dt.at[index, 'delta_max_power'] = ((row['Max Power [W]'] - default_max_power)/default_max_power)*100
-# 		result_dt.at[index, 'delta_avg_power'] = ((row['Average Power [W]'] - default_avg_power)/default_avg_power)*100
-# 		result_dt.at[index, 'delta_energy'] = ((row['Energy [J]'] - default_energy)/default_energy)*100
-# 		result_dt.at[index, 'delta_time'] = ((row['tot_times19'] - default_time)/default_time)*100
-# 	else:
-# 		cur_level = row['LEVEL']
-# 		default_time = row['tot_times19']
-# 		default_acc = row['accuracy19']
-# 		default_max_power = row['Max Power [W]']
-# 		default_avg_power = row['Average Power [W]']
-# 		default_energy = row['Energy [J]']
-
-# 		result_dt.at[index, 'delta_accuracy'] = 0
-# 		result_dt.at[index, 'delta_max_power'] = 0
-# 		result_dt.at[index, 'delta_avg_power'] = 0
-# 		result_dt.at[index, 'delta_energy'] = 0
-# 		result_dt.at[index, 'delta_time'] = 0
-
-# 	result_dt.at[index, 'delta acc 0'] = ((row['acc 0'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 1'] = ((row['acc 1'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 2'] = ((row['acc 2'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 3'] = ((row['acc 3'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 4'] = ((row['acc 4'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 5'] = ((row['acc 5'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 6'] = ((row['acc 6'] - row['accuracy19'])/row['accuracy19'])*100
-# 	result_dt.at[index, 'delta acc 7'] = ((row['acc 7'] - row['accuracy19'])/row['accuracy19'])*100
-
-
-
 
 # Count the number of entries per level
 # numberOfEntries = np.zeros(8)
 # for i in range(0,8):
 # 	numberOfEntries[i] = len(result_dt[result_dt['LEVEL'] == i])
 
+# Write the values to the excel file
+for key, value in Benchmark.items():
+	Benchmark_dt[key].to_excel(writer, sheet_name=str(key))
+
+writer.save()
+exit()
 
 
 
