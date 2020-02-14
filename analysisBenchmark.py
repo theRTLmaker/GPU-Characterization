@@ -100,7 +100,7 @@ for idx, line in enumerate(expectedOutput):
     if match is not None:
         match = match.groups()
         varAnalysis[outputNameVars[-1]] = [str(match[0]).replace(" ", "").split(","), str(match[1])]
-print(varAnalysis)
+
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 
@@ -339,10 +339,13 @@ for key, value in Benchmark.items():
                             })
 
                     chart.add_series(char_data)
-
                     # Configure the chart axes.
-                    chart.set_title({'name': str(dataType) + str(var) + " [" + str(analysis) + "]"})
-                    chart.set_y_axis({'name': str(analysisList[1]), 'major_gridlines': {'visible': True}})
+                    if "delta" in dataType:
+                    	chart.set_title({'name': str(dataType) + str(var) + " [%]"})
+                    	chart.set_y_axis({'name': str(dataType) + " [%]", 'major_gridlines': {'visible': True}})
+                    else:
+                    	chart.set_title({'name': str(var) + " [" + str(analysis) + "]"})
+                    	chart.set_y_axis({'name': str(dataType) + " " + str(analysisList[1]), 'major_gridlines': {'visible': True}})
 
 
                     # Insert the chart into the worksheet.
