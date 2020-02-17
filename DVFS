@@ -2,6 +2,7 @@
 
 reset=0
 voltageshow=0
+both=0
 
 LevelGPU=-1
 LevelMEMORY=-1
@@ -17,13 +18,14 @@ VoltageMEMORY=0
 
 opts=0
 
-while getopts rcL:F:V:l:f:v:P:p: option
+while getopts rcbL:F:V:l:f:v:P:p: option
 do
 	opts=1
 	case "${option}"
 	in
 	r) reset=1;;
   c) voltageshow=1;;
+  b) both=1;;
 	L) LevelGPU=${OPTARG};;
 	F) ClockGPU=${OPTARG};;
 	V) VoltageGPU=${OPTARG};;
@@ -54,6 +56,14 @@ if [ $voltageshow -eq 1 ]
 then
   rocm-smi --showvoltage
   exit 1
+fi
+
+# Edit Power Play Table
+# GPU Core
+if [ $both -eq 1 ]
+then
+  echo "Setting GPU level to CORE: $SetLevelGPU MEM: $SetLevelMEMORY"
+  rocm-smi --setsclk $SetLevelGPU --setmclk $SetLevelMEMORY
 fi
 
 # Edit Power Play Table

@@ -1,0 +1,291 @@
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028297 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.364757 ms
+Result: Correct
+
+#################################################
+Execution: 0
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.030223 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.357194 ms
+Result: Correct
+
+#################################################
+Execution: 1
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028890 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.365791 ms
+Result: Correct
+
+#################################################
+Execution: 2
+#################################################
+
+Temperature: 29.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028149 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.353793 ms
+Result: Correct
+
+#################################################
+Execution: 3
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028149 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.370079 ms
+Result: Correct
+
+#################################################
+Execution: 4
+#################################################
+
+Temperature: 29.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028594 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.359121 ms
+Result: Correct
+
+#################################################
+Execution: 5
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028000 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.378973 ms
+Result: Correct
+
+#################################################
+Execution: 6
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.028890 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.352900 ms
+Result: Correct
+
+#################################################
+Execution: 7
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.029186 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.359122 ms
+Result: Correct
+
+#################################################
+Execution: 8
+#################################################
+
+Temperature: 30.0 c
+
+========================ROCm System Management Interface========================
+GPU[1] 		: OverDrive set to 0
+GPU[1] 		: Reset OverDrive DPM table
+GPU[1] 		: Successfully reset clocks
+==============================End of ROCm SMI Log ==============================
+Setting GPU Core level to 7
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set sclk frequency mask to Level 7
+==============================End of ROCm SMI Log ==============================
+Setting GPU Memory level to 3
+
+
+========================ROCm System Management Interface========================
+GPU[1] 		: Successfully set mclk frequency mask to Level 3
+==============================End of ROCm SMI Log ==============================
+Registered time: 0.029038 ms
+Total GPU memory 17163091968, free 16894656512
+Buffer size: 0MB
+MemCpyTime 0.382970 ms
+Result: Correct
+
+#################################################
+Execution: 9
+#################################################
+
+Temperature: 29.0 c

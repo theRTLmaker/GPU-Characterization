@@ -8,7 +8,7 @@
 
 
 #define COMP_ITERATIONS (4096) //512
-#define REGBLOCK_SIZE (4)
+#define REGBLOCK_sizeB (4)
 #define UNROLL_ITERATIONS (32)
 #define THREADS_WARMUP (1024)
 int THREADS;
@@ -67,11 +67,11 @@ double finalizeEvents(hipEvent_t start, hipEvent_t stop){
 }
 
 void runbench_warmup(){
-	const int BLOCK_SIZE = 256;
+	const int BLOCK_sizeB = 256;
 	const int TOTAL_REDUCED_BLOCKS = 256;
     int aux=0;
 
-	dim3 dimBlock(BLOCK_SIZE, 1, 1);
+	dim3 dimBlock(BLOCK_sizeB, 1, 1);
 	dim3 dimReducedGrid(TOTAL_REDUCED_BLOCKS, 1, 1);
 
 	hipLaunchKernelGGL((warmup), dim3(dimReducedGrid), dim3(dimBlock ), 0, 0, aux);
@@ -94,7 +94,6 @@ void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut){
 	double time = finalizeEvents(start, stop);
 	
 	*kernel_time = time;
-
 }
 
 int main(int argc, char *argv[]){
@@ -105,26 +104,27 @@ int main(int argc, char *argv[]){
 	hipDeviceProp_t deviceProp;
 
 	int ntries;
-	unsigned int size, sizeB; 
+	unsigned int sizeB, size; 
 	if (argc > 2) {
-		size = atoi(argv[1]);
+		sizeB = atoi(argv[1]);
 		ntries = atoi(argv[2]);
 	}
 	else if(argc > 1) {
-		size = atoi(argv[1]);
+		sizeB = atoi(argv[1]);
 		ntries = 1;
 	}
 	else {
-		printf("Usage: %s [buffer size] [ntries]\n", argv[0]);
+		printf("Usage: %s [buffer sizeB kBytes] [ntries]\n", argv[0]);
 		exit(1);
 	}
 
-	// Computes the total size in bits
-	sizeB = size*sizeof(int);
+	// Computes the total sizeB in bits
+	sizeB *= 1024;
+	size = sizeB/(int)sizeof(int);
 
-	if(size >= 1024) {
-		if(size % 1024 != 0) {
-			printf("Size not divisible by 1024!!!\n");
+	if(sizeB >= 1024) {
+		if(sizeB % 1024 != 0) {
+			printf("sizeB not divisible by 1024!!!\n");
 			exit(1);
 		}
 	}
@@ -150,9 +150,16 @@ int main(int argc, char *argv[]){
 		BLOCKS = size/1024;
 	}	
 
+	printf("size %d sizeB %d\n", size, sizeB);
+	printf("THREADS %d BLOCKS %d\n", THREADS, BLOCKS);
+
 	// Initialize Host Memory
-	int *hostIn = (int *) malloc(size * sizeof(int));
-	int *hostOut = (int *) calloc(size, sizeof(int));
+	int *hostIn = (int *) malloc(sizeB);
+	int **hostOut = (int **) malloc(10 * sizeof(int*));
+	for (int i = 0; i < 10; ++i)
+	{
+		hostOut[i] = (int *) calloc(size, sizeof(int));
+	}
 
 	// Generates array of random numbers
     srand((unsigned) time(NULL));
@@ -168,8 +175,8 @@ int main(int argc, char *argv[]){
 	hostIn[i] = sum;
 
 	// Initialize Host Memory
-	int* deviceIn;
-	int* deviceOut;
+	int *deviceIn;
+	int *deviceOut;
 	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
 	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
 
@@ -203,7 +210,7 @@ int main(int argc, char *argv[]){
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
 	// Transfer data from device to host
-	HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[0], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -211,16 +218,16 @@ int main(int argc, char *argv[]){
 	HIP_SAFE_CALL(hipDeviceReset());
 
 	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
+	printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
 	printf("MemCpyTime %f ms\n", MemCpyTime);
 
 	// Verification of data transfer
 	int sum_received = 0;
 	for (i = 0; i < size-1; i++) {
-		sum_received += hostOut[i];
+		sum_received += hostOut[0][i];
 	}
 	printf("Result: ");
-	if(sum == sum_received && sum == hostOut[size-1]) {
+	if(sum == sum_received && sum == hostOut[0][size-1]) {
 		printf("Correct\n");
 	}
 	else {
@@ -228,6 +235,9 @@ int main(int argc, char *argv[]){
 	}
 
 	free(hostIn);
+	for (int i = 0; i < 10; ++i){
+		free(hostOut[i]);
+	}
 	free(hostOut);
 	return 0;
 }

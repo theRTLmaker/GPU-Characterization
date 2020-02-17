@@ -97,7 +97,6 @@ def runDVFSscript(command):
     process = runBashCommand(script)
     return process
 
-
 def setPerformanceLevel(source, level):
     """Sets a given performance level for the GPU Core and Memory.
 
@@ -127,6 +126,13 @@ def setPerformanceLevel(source, level):
 
     return True
 
+def setCoreAndMemPerformanceLevel(coreLevel, memoryLevel):
+    assert coreLevel in list(range(0, 8)), "Core Performance Level betwen 0 and 7."
+    assert memoryLevel in list(range(0, 4)), "Core Performance Level betwen 0 and 3."
+    result = runDVFSscript("-P " + str(level))
+    if "ERROR" in result.stdout:
+        return False
+    return True
 
 def editPerformanceLevel(source, level, frequency, voltage):
     """Edits a given performance level for the GPU Core and Memory.
@@ -158,6 +164,18 @@ def editPerformanceLevel(source, level, frequency, voltage):
     else:
         print("Not valid source used - core or mem")
         return False
+
+    return True
+
+def editAllPerformanceLevels():
+    for level in range(0, 4):
+        result = editPerformanceLevel("mem", level, MemoryFreq[level], MemoryVoltage[level])
+        if result == False:
+            return False
+    for level in range(0, 8):
+        result = editPerformanceLevel("core", level, CoreFreq[level], CoreVoltage[level])
+        if result == False:
+            return False
 
     return True
 
@@ -363,29 +381,33 @@ if args.c == 1 and args.m == 1:
 elif args.c == 1:
     # Activates intended performance levels
     working = [0] * 8
+    last = [0] * 8
     for i in args.levelscore:
         working[i] = 1
 
     while 1 in working:
         # Run the benchmark for the proposed levels
         for levels in args.levelscore:
-            # Check if level is still giving valid results
-            if working[levels] == 0:
-                continue
-            # Set Core performance level to the one to be tested
-            if setPerformanceLevel("core", int(levels)) == False:
-                working[levels] = 0
-                continue
-            # Set Memory performance level to the highest
-            if setPerformanceLevel("mem", 3) == False:
-                working[levels] = 0
-                continue
-            # Get current DVFS settings - to make sure it was correctly applyed
-            if currentPerfLevel() != (int(levels), 3):
-                working[levels] = 0
-                continue
             # Run the benchmark multiple times
             for i in range(0, args.tries):
+                # Places PowerPlay Table to current values
+                if editAllPerformanceLevels() == False:
+                    print("not able to update table for current run")
+                    continue
+                # Set Core performance level to the one to be tested
+                if setPerformanceLevel("core", int(levels)) == False:
+                    print(" Not able to select core level.")
+                    continue
+                # Set Memory performance level to the highest
+                if setPerformanceLevel("mem", 3) == False:
+                    print(" Not able to select memory level.")
+                    continue
+                # Get current DVFS settings - to make sure it was correctly applyed
+                cur = currentPerfLevel()
+                if cur != (int(levels), 3):
+                    print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
+                    continue
+
                 # Command to be launch
                 if args.v == 1:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
@@ -404,7 +426,14 @@ elif args.c == 1:
 
         if args.v == 1:
             # Undervolt Core by 10mV
-            CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
+            for editLevel in range(0,8):
+                if int(CoreVoltage[editLevel]) - 10 > 810:
+                    CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - 10
+                else:
+                    CoreVoltage[editLevel] = 800 + editLevel * 2
+                if last[editLevel] == 1:
+                    working[editLevel] = 0
+                last[editLevel] = 1
         else:
             # Overclock all levels Core by 10Hz
             CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
@@ -419,38 +448,37 @@ elif args.c == 1:
 elif args.m == 1:
     # Activates intended performance levels
     working = [0] * 4
+    last = [0] * 4
     for i in args.levelsmemory:
         working[i] = 1
 
     while 1 in working:
         # Run the benchmark for the proposed levels
         for levels in args.levelsmemory:
-            print("levels " + str(levels))
             # Check if level is still giving valid results
             if working[levels] == 0:
-                continue
-            # Set Core performance level to the one to be tested
-            if setPerformanceLevel("core", 7) == False:
-                print(" Not able to select core level.")
-                working[levels] = 0
-                continue
-            # Set Memory performance level to the highest
-            if setPerformanceLevel("mem", int(levels)) == False:
-                print(" Not able to select memory level.")
-                working[levels] = 0
-                continue
-            # Get current DVFS settings - to make sure it was correctly applyed
-            cur = currentPerfLevel()
-            if cur != (7, int(levels)):
-                print(" Selected Performance Levels don't match current ones.")
-                print(" ", end=" ")
-                print(cur, end=" ")
-                print("!= (7, " + str(levels) + ")")
-                working[levels] = 0
                 continue
 
             # Run the benchmark multiple times
             for i in range(0, args.tries):
+                # Places PowerPlay Table to current values
+                if editAllPerformanceLevels() == False:
+                    print("not able to update table for current run")
+                    continue
+                # Set Core performance level to the one to be tested
+                if setPerformanceLevel("core", 7) == False:
+                    print(" Not able to select core level.")
+                    continue
+                # Set Memory performance level to the highest
+                if setPerformanceLevel("mem", int(levels)) == False:
+                    print(" Not able to select memory level.")
+                    continue
+                # Get current DVFS settings - to make sure it was correctly applyed
+                cur = currentPerfLevel()
+                if cur != (7, int(levels)):
+                    print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
+                    continue
+
                 # Command to be launch
                 if args.v == 1:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
@@ -468,7 +496,14 @@ elif args.m == 1:
 
         if args.v == 1:
             # Undervolt Memory by 10mV
-            MemoryVoltage = [int(volt) - 10 for volt in MemoryVoltage]
+            for editLevel in range(0,4):
+                if int(MemoryVoltage[editLevel]) - 10 > 810:
+                    MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - 10
+                else:
+                    MemoryVoltage[editLevel] = 800 + editLevel * 2
+                    if last[editLevel] == 1:
+                    	working[editLevel] = 0
+                    last[editLevel] = 1
         else:
             # Overclock Memory by 10Hz
             MemoryFreq = [int(freq) + 10 for freq in MemoryFreq]
