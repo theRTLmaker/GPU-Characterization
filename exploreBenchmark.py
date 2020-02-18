@@ -226,6 +226,11 @@ parser.add_argument('-b',
                     help="Name of the benchmark",
                     required=True,
                     nargs='+')
+parser.add_argument('-r', '--reset',
+                    const=1,
+                    default=0,
+                    action='store_const',
+                    help="Reset the DVFS table between runs")
 parser.add_argument('-c',
                     const=1,
                     default=0,
@@ -264,6 +269,11 @@ parser.add_argument('-t',
                     help="Number of times to perform the benchmark",
                     type=int,
                     choices=range(0, 51))
+parser.add_argument('--config',
+                    metavar='path',
+                    type=str,
+                    help="Config file",
+                    nargs='+')
 args = parser.parse_args()
 
 if args.levelscore == None:
@@ -282,12 +292,6 @@ if args.f == 1:
     print("frequency")
 print()
 
-# Checks if the benchmark exists and create a Results folder
-folder = str(args.benchmark[0][:args.benchmark[0].rfind('/')])
-if not os.path.isdir(folder) or not os.path.isfile(args.benchmark[0]):
-    print("Benchmark doesn't exist!")
-    exit()
-Path(folder + "/Results").mkdir(parents=True, exist_ok=True)
 
 # Reset GPU Power Table
 result = runBashCommand("rocm-smi -r")
@@ -303,22 +307,70 @@ if "Successfully" not in result.stdout:
 
 # Disable DVFS
 result = runBashCommand("rocm-smi --setperflevel manual")
+
 if "Successfully" not in result.stdout:
     print("Not able to set manual performance level")
     exit()
+if args.config is not None:
+    Core = []
+    Mem = []
+    # Parse config file
+    config_file = open(" ".join(args.config), "r")
+    while True:
+        line = config_file.readline()
+        if not line:
+            break
 
-# Get the current power table
-process = runBashCommand("rocm-smi -S")
-i = 0
-for line in process.stdout.split('\n'):
-    if i > 4 and i < 13:
-        CoreFreq.append(line.replace(':', '').split()[2].replace("Mhz", ''))
-        CoreVoltage.append(line.replace(':', '').split()[3].replace("mV", ''))
-    if i > 13 and i < 18:
-        MemoryFreq.append(line.replace(':', '').split()[2].replace("Mhz", ''))
-        MemoryVoltage.append(
-            line.replace(':', '').split()[3].replace("mV", ''))
-    i = i + 1
+        # Check the type of content of the output file
+        parseType = re.search(r"(.*?)\=", line)
+        if parseType is not None:
+            # Get the information written on the name of the file
+            if parseType.group(0) == "defaultCore=":
+                for i in range(0, 8):
+                    outputLine = config_file.readline()
+                    if not outputLine:
+                        break
+                    Core.append([int(n) for n in outputLine.replace('\n', '').split(",")])
+            # Get the expected output lines
+            if parseType.group(0) == "defaultMemory=":
+                for i in range(0, 4):
+                    outputLine = config_file.readline()
+                    if not outputLine:
+                        break
+                    Mem.append([int(n) for n in outputLine.replace('\n', '').split(",")])
+    for pair in Core:
+        a, b = pair
+        CoreFreq.append(a)
+        CoreVoltage.append(b)
+
+    for pair in Mem:
+        a, b = pair
+        MemoryFreq.append(a)
+        MemoryVoltage.append(b)
+
+    if editAllPerformanceLevels() == False:
+        print("not able to update table for current run")
+        exit()
+else:
+    # Get the current power table
+    process = runBashCommand("rocm-smi -S")
+    i = 0
+    for line in process.stdout.split('\n'):
+        if i > 4 and i < 13:
+            CoreFreq.append(line.replace(':', '').split()[2].replace("Mhz", ''))
+            CoreVoltage.append(line.replace(':', '').split()[3].replace("mV", ''))
+        if i > 13 and i < 18:
+            MemoryFreq.append(line.replace(':', '').split()[2].replace("Mhz", ''))
+            MemoryVoltage.append(
+                line.replace(':', '').split()[3].replace("mV", ''))
+        i = i + 1
+
+# Checks if the benchmark exists and create a Results folder
+folder = str(args.benchmark[0][:args.benchmark[0].rfind('/')])
+if not os.path.isdir(folder) or not os.path.isfile(args.benchmark[0]):
+    print("Benchmark doesn't exist!")
+    exit()
+Path(folder + "/Results").mkdir(parents=True, exist_ok=True)
 
 # Exploration of Core and Memory
 if args.c == 1 and args.m == 1:
@@ -370,7 +422,7 @@ if args.c == 1 and args.m == 1:
             CoreVoltage = [int(volt) - 10 for volt in CoreVoltage]
         else:
             # Overclock all levels Core by 10Hz
-            CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
+            CoreFreq = [int(volt) + 10 for volt in CoreFreq]
 
         # Apply new Power Table Settings
         for levels in range(0, 8):
@@ -391,9 +443,10 @@ elif args.c == 1:
             # Run the benchmark multiple times
             for i in range(0, args.tries):
                 # Places PowerPlay Table to current values
-                if editAllPerformanceLevels() == False:
-                    print("not able to update table for current run")
-                    continue
+                if args.reset == 1:
+                    if editAllPerformanceLevels() == False:
+                        print("not able to update table for current run")
+                        continue
                 # Set Core performance level to the one to be tested
                 if setPerformanceLevel("core", int(levels)) == False:
                     print(" Not able to select core level.")
@@ -405,7 +458,7 @@ elif args.c == 1:
                 # Get current DVFS settings - to make sure it was correctly applyed
                 cur = currentPerfLevel()
                 if cur != (int(levels), 3):
-                    print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
+                    print(" Selected Performance Levels don't match current ones. %s != (%d, 3)" % (cur, int(levels)))
                     continue
 
                 # Command to be launch
@@ -431,17 +484,17 @@ elif args.c == 1:
                     CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - 10
                 else:
                     CoreVoltage[editLevel] = 800 + editLevel * 2
-                if last[editLevel] == 1:
-                    working[editLevel] = 0
-                last[editLevel] = 1
+                    if last[editLevel] == 1:
+                        working[editLevel] = 0
+                    last[editLevel] = 1
         else:
             # Overclock all levels Core by 10Hz
-            CoreFrequency = [int(volt) + 10 for volt in CoreFrequency]
+            CoreFreq = [int(volt) + 10 for volt in CoreFreq]
 
         # Apply new Power Table Settings
         for levels in range(0, 8):
-            if editPerformanceLevel("core", levels, CoreFrequency[levels],
-                                    CoreVoltage[levels]) == False:
+            if editPerformanceLevel("core", levels, CoreFreq[levels], CoreVoltage[levels]) == False:
+                print("Failed to update level %d" % (levels))
                 working[levels] = 0
 
 # Exploration of Memory
@@ -462,9 +515,10 @@ elif args.m == 1:
             # Run the benchmark multiple times
             for i in range(0, args.tries):
                 # Places PowerPlay Table to current values
-                if editAllPerformanceLevels() == False:
-                    print("not able to update table for current run")
-                    continue
+                if args.reset == 1:
+                    if editAllPerformanceLevels() == False:
+                        print("not able to update table for current run")
+                        continue
                 # Set Core performance level to the one to be tested
                 if setPerformanceLevel("core", 7) == False:
                     print(" Not able to select core level.")
@@ -502,7 +556,7 @@ elif args.m == 1:
                 else:
                     MemoryVoltage[editLevel] = 800 + editLevel * 2
                     if last[editLevel] == 1:
-                    	working[editLevel] = 0
+                        working[editLevel] = 0
                     last[editLevel] = 1
         else:
             # Overclock Memory by 10Hz
@@ -510,8 +564,8 @@ elif args.m == 1:
 
         # Apply new Power Table Settings
         for levels in range(0, 4):
-            if editPerformanceLevel("mem", levels, MemoryFreq[levels],
-                                    MemoryVoltage[levels]) == False:
+            if editPerformanceLevel("mem", levels, MemoryFreq[levels], MemoryVoltage[levels]) == False:
+                print("Failed to update level %d" % (levels))
                 working[levels] = 0
 
 else:

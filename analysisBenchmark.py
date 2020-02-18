@@ -115,9 +115,12 @@ for f in files:
     # Get the benchmark type
     regex = re.compile(fileConvention[:-1] + "-")
     benchmarkType = []
-    for i in regex.match(f).groups():
-        benchmarkType.append(i)
-    benchmarkType = "-".join(benchmarkType)
+    if regex.match(f).groups():
+        for i in regex.match(f).groups():
+            benchmarkType.append(i)
+        benchmarkType = "-".join(benchmarkType)
+    else:
+        benchmarkType = 'Data'
 
     # Get the data from the filename
     regex = re.compile(

@@ -1,0 +1,7 @@
+FILE=
+eventperformance_Int
+
+OUTPUT=
+Registered time: {Execution Time (average, min, max (Time [ms]))} ms
+Result: {validity}
+Temperature: {Temperature} c

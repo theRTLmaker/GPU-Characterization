@@ -39,14 +39,34 @@ __global__ void warmup(int aux){
 	shared[threadIdx.x] = r0;
 }
 
-template <class T> __global__ void benchmark(T* cdin,  T* cdout){
+template <class T> __global__ void benchmark(T* cdin0, T* cdin1, T* cdin2, T* cdin3, T* cdin4, T* cdin5, T* cdin6, T* cdin7, T* cdin8, T* cdin9, 
+											 T* cdout0, T* cdout1, T* cdout2, T* cdout3, T* cdout4, T* cdout5, T* cdout6, T* cdout7, T* cdout8, T* cdout9){
 
 	const long ite=blockIdx.x * THREADS + threadIdx.x;
 
-	register T r0;
+	register T r0, r1, r2, r3, r4, r5, r6, r7, r8, r9;
 
-	r0=cdin[ite];
-	cdout[ite]=r0;
+	r0=cdin0[ite];
+	r1=cdin1[ite];
+	r2=cdin2[ite];
+	r3=cdin3[ite];
+	r4=cdin4[ite];
+	r5=cdin5[ite];
+	r6=cdin6[ite];
+	r7=cdin7[ite];
+	r8=cdin8[ite];
+	r9=cdin9[ite];
+
+	cdout0[ite]=r0;
+	cdout1[ite]=r1;
+	cdout2[ite]=r2;
+	cdout3[ite]=r3;
+	cdout4[ite]=r4;
+	cdout5[ite]=r5;
+	cdout6[ite]=r6;
+	cdout7[ite]=r7;
+	cdout8[ite]=r8;
+	cdout9[ite]=r9;
 }
 
 void initializeEvents(hipEvent_t *start, hipEvent_t *stop){
@@ -79,7 +99,8 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut){
+void runbench(double* kernel_time, double* flops, int * hostIn0, int * hostIn1, int * hostIn2, int * hostIn3, int * hostIn4, int * hostIn5, int * hostIn6, int * hostIn7, int * hostIn8, int * hostIn9, 
+    											  int * hostOut0, int * hostOut1, int * hostOut2, int * hostOut3, int * hostOut4, int * hostOut5, int * hostOut6, int * hostOut7, int * hostOut8, int * hostOut9) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -87,7 +108,8 @@ void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut){
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
+    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn0, (int *) hostIn1, (int *) hostIn2, (int *) hostIn3, (int *) hostIn4, (int *) hostIn5, (int *) hostIn6, (int *) hostIn7, (int *) hostIn8, (int *) hostIn9, 
+    																		  (int *) hostOut0, (int *) hostOut1, (int *) hostOut2, (int *) hostOut3, (int *) hostOut4, (int *) hostOut5, (int *) hostOut6, (int *) hostOut7, (int *) hostOut8, (int *) hostOut9);
 
 	hipDeviceSynchronize();
 
@@ -122,8 +144,8 @@ int main(int argc, char *argv[]){
 	sizeB *= 1024;
 	size = sizeB/(int)sizeof(int);
 
-	if(sizeB >= 1024) {
-		if(sizeB % 1024 != 0) {
+	if(size >= 1024) {
+		if(size % 1024 != 0) {
 			printf("sizeB not divisible by 1024!!!\n");
 			exit(1);
 		}
@@ -150,9 +172,9 @@ int main(int argc, char *argv[]){
 		BLOCKS = size/1024;
 	}	
 
-	printf("size %d sizeB %d\n", size, sizeB);
-	printf("THREADS %d BLOCKS %d\n", THREADS, BLOCKS);
-
+	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
+	printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
+	
 	// Initialize Host Memory
 	int *hostIn = (int *) malloc(sizeB);
 	int **hostOut = (int **) malloc(10 * sizeof(int*));
@@ -175,10 +197,28 @@ int main(int argc, char *argv[]){
 	hostIn[i] = sum;
 
 	// Initialize Host Memory
-	int *deviceIn;
-	int *deviceOut;
+	int *deviceIn, *deviceIn1, *deviceIn2, *deviceIn3, *deviceIn4, *deviceIn5, *deviceIn6, *deviceIn7, *deviceIn8, *deviceIn9;
+	int *deviceOut, *deviceOut1, *deviceOut2, *deviceOut3, *deviceOut4, *deviceOut5, *deviceOut6, *deviceOut7, *deviceOut8, *deviceOut9;
 	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn1, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn2, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn3, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn4, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn5, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn6, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn7, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn8, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn9, size * sizeof(int)));
 	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut1, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut2, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut3, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut4, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut5, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut6, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut7, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut8, size * sizeof(int)));
+	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut9, size * sizeof(int)));
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -188,6 +228,15 @@ int main(int argc, char *argv[]){
 
 	// Transfer data from host to device
 	HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn1, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn2, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn3, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn4, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn5, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn6, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn7, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn8, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+	HIP_SAFE_CALL(hipMemcpy(deviceIn9, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -202,7 +251,8 @@ int main(int argc, char *argv[]){
 		runbench_warmup();
 	}
 	for (i=0;i<ntries;i++){
-		runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
+		runbench(&n_time[0][0],&value[0][0], deviceIn, deviceIn1, deviceIn2, deviceIn3, deviceIn4, deviceIn5, deviceIn6, deviceIn7, deviceIn8, deviceIn9,
+											 deviceOut, deviceOut1, deviceOut2, deviceOut3, deviceOut4, deviceOut5, deviceOut6, deviceOut7, deviceOut8, deviceOut9);
 		printf("Registered time: %f ms\n", n_time[0][0]);
 	}
 
@@ -211,28 +261,38 @@ int main(int argc, char *argv[]){
 
 	// Transfer data from device to host
 	HIP_SAFE_CALL(hipMemcpy(hostOut[0], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[1], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[2], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[3], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[4], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[5], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[6], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[7], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[8], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+	HIP_SAFE_CALL(hipMemcpy(hostOut[9], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
 
 	HIP_SAFE_CALL(hipDeviceReset());
 
-	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
 	printf("MemCpyTime %f ms\n", MemCpyTime);
 
 	// Verification of data transfer
-	int sum_received = 0;
-	for (i = 0; i < size-1; i++) {
-		sum_received += hostOut[0][i];
+	int sucess = 0;
+	for (int j = 0; j < 10; ++j)
+	{
+		int sum_received = 0;
+		for (i = 0; i < size-1; i++) {
+			sum_received += hostOut[j][i];
+		}
+		if(sum == sum_received && sum == hostOut[j][size-1]) 
+			sucess++;
 	}
-	printf("Result: ");
-	if(sum == sum_received && sum == hostOut[0][size-1]) {
-		printf("Correct\n");
-	}
-	else {
-		printf("Incorrect\n");
-	}
+	if(sucess == 10)
+		printf("Result: True\n");
+	else
+		printf("Result: False\n");
 
 	free(hostIn);
 	for (int i = 0; i < 10; ++i){

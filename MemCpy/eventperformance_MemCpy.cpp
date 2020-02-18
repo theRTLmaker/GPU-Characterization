@@ -107,20 +107,23 @@ int main(int argc, char *argv[]){
 	int ntries;
 	unsigned int size, sizeB; 
 	if (argc > 2) {
-		size = atoi(argv[1]);
+		sizeB = atoi(argv[1]);
 		ntries = atoi(argv[2]);
 	}
 	else if(argc > 1) {
-		size = atoi(argv[1]);
+		sizeB = atoi(argv[1]);
 		ntries = 1;
 	}
 	else {
-		printf("Usage: %s [buffer size] [ntries]\n", argv[0]);
+		printf("Usage: %s [buffer sizeB kBytes] [ntries]\n", argv[0]);
 		exit(1);
 	}
 
 	// Computes the total size in bits
-	sizeB = size*sizeof(int);
+	sizeB *= 1024;
+	size = sizeB/(int)sizeof(int);
+
+	printf("sizeB %d size %d\n", sizeB, size);
 
 	if(size >= 1024) {
 		if(size % 1024 != 0) {
@@ -150,6 +153,9 @@ int main(int argc, char *argv[]){
 		BLOCKS = size/1024;
 	}	
 
+	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
+	printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
+	
 	// Initialize Host Memory
 	int *hostIn = (int *) malloc(size * sizeof(int));
 	int *hostOut = (int *) calloc(size, sizeof(int));
@@ -210,8 +216,6 @@ int main(int argc, char *argv[]){
 
 	HIP_SAFE_CALL(hipDeviceReset());
 
-	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
 	printf("MemCpyTime %f ms\n", MemCpyTime);
 
 	// Verification of data transfer
