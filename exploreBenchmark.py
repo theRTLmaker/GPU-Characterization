@@ -202,6 +202,13 @@ def currentPerfLevel():
 
 
 def appendCurrentTemp(file):
+    """Writes the current GPU Temperature to an file
+
+    Args:
+        file - a path to a filepath.
+    Returns:
+        temp - current GPU temperature.
+    """
     result = runBashCommand("rocm-smi")
     line = result.stdout.split('\n')[5]
     # Find temperature
@@ -213,6 +220,23 @@ def appendCurrentTemp(file):
 
     return temp
 
+def currentVoltageIsRespected(currentVolt):
+    """Gets the current voltage applied to the GPU Core
+
+    Args:
+        currentVolt - a path to a filepath.
+    Returns:
+        True if the current applied voltage respects the
+        intended one.
+    """
+    result = runBashCommand("rocm-smi --showvoltage")
+    # Find core voltage
+    volt = re.search(r"(mV) (.*?)\n", line).group()
+    print(volt)
+    exit()
+    if abs(volt - currentVolt) < 5:
+        return True, volt
+    return False, volt
 
 # Parser to collect user given arguments
 parser = argparse.ArgumentParser(
@@ -466,6 +490,12 @@ elif args.c == 1:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
                         args.benchmark, folder, levels, 3, "CoreExploration",
                         "Voltage")
+
+                    # Checks if the intended voltage is correctly applied to the GPU
+                    result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)])
+                    if result == False:
+                        print("Current voltage is %d != %d" % (int(volt), int(levels)))
+                        continue
                 else:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
                         args.benchmark, folder, levels, 3, "CoreExploration",

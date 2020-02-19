@@ -24,8 +24,8 @@ do
 	case "${option}"
 	in
 	r) reset=1;;
-	c) voltageshow=1;;
-	b) both=1;;
+  c) voltageshow=1;;
+  b) both=1;;
 	L) LevelGPU=${OPTARG};;
 	F) ClockGPU=${OPTARG};;
 	V) VoltageGPU=${OPTARG};;
@@ -71,7 +71,13 @@ fi
 if [ $LevelGPU != -1 ]
 then
 	echo "Setting GPU level to $LevelGPU $ClockGPU $VoltageGPU"
-	string="$(rocm-smi --autorespond y --setslevel $LevelGPU $ClockGPU $VoltageGPU)"
+	string=$(( cat <<EOF
+  spawn rocm-smi --setslevel $LevelGPU $ClockGPU $VoltageGPU
+
+  expect "Do you accept these terms? " { send "y\r" }
+  expect "GPU" 
+EOF
+  ) | expect -f -)
   	if [[ $string == *"ERROR"* ]]; then
     	echo "ERROR"
     else 
@@ -83,7 +89,13 @@ fi
 if [ $LevelMEMORY != -1 ]
 then
 	echo "Setting MEMORY level to $LevelMEMORY $ClockMEMORY $VoltageMEMORY"
-	string="$(rocm-smi --autorespond y --setmlevel $LevelMEMORY $ClockMEMORY $VoltageMEMORY)"
+	string=$(( cat <<EOF
+  spawn rocm-smi --setmlevel $LevelMEMORY $ClockMEMORY $VoltageMEMORY
+
+  expect "Do you accept these terms? " { send "y\r" }
+  expect "GPU" 
+EOF
+  ) | expect -f -)
   	if [[ $string == *"ERROR"* ]]; then
     	echo "ERROR"
     else 
