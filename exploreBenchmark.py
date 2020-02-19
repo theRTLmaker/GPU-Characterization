@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 import os
 import re
+import sys
+import json
 
 CoreFreq = []
 CoreVoltage = []
@@ -58,12 +60,20 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
     output_file.write("Execution: " + str(execution) + "\n")
     output_file.write("#################################################\n")
     output_file.write("\n")
-    process = subprocess.run(bashCommand.split(),
-                             stdout=output_file,
-                             stderr=output_file,
-                             check=True,
-                             text=True)
-    return process
+    if "3.6" in sys.version:
+        process = subprocess.run(bashCommand.split(),
+                                 stdout=output_file,
+                                 stderr=output_file,
+                                 stdin=subprocess.PIPE,
+                                 check=True)
+        return process.stdout.decode("utf-8") 
+    else:
+        process = subprocess.run(bashCommand.split(),
+                                 stdout=output_file,
+                                 stderr=output_file,
+                                 check=True,
+                                 text=True)
+    return process.stdout
 
 
 def runBashCommand(bashCommand):
@@ -76,13 +86,20 @@ def runBashCommand(bashCommand):
         The resulting process
     """
     print("Running %s" % (bashCommand))
-    process = subprocess.run(bashCommand.split(),
+    if "3.6" in sys.version:
+        process = subprocess.run(bashCommand.split(),
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 stdin=subprocess.PIPE,
+                                 check=True)
+        return process.stdout.decode("utf-8") 
+    else:
+        process = subprocess.run(bashCommand.split(),
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,
                              check=True,
                              text=True)
-    return process
-
+    return process.stdout
 
 def runDVFSscript(command):
     """Runs the DVFS script
@@ -112,13 +129,13 @@ def setPerformanceLevel(source, level):
         assert level in list(range(
             0, 8)), "Core Performance Level betwen 0 and 7."
         result = runDVFSscript("-P " + str(level))
-        if "ERROR" in result.stdout:
+        if "ERROR" in result:
             return False
     elif source == "mem":
         assert level in list(range(
             0, 4)), "Core Performance Level betwen 0 and 3."
         result = runDVFSscript("-p " + str(level))
-        if "ERROR" in result.stdout:
+        if "ERROR" in result:
             return False
     else:
         print("Not valid source used - core or mem")
@@ -130,7 +147,7 @@ def setCoreAndMemPerformanceLevel(coreLevel, memoryLevel):
     assert coreLevel in list(range(0, 8)), "Core Performance Level betwen 0 and 7."
     assert memoryLevel in list(range(0, 4)), "Core Performance Level betwen 0 and 3."
     result = runDVFSscript("-P " + str(level))
-    if "ERROR" in result.stdout:
+    if "ERROR" in result:
         return False
     return True
 
@@ -152,14 +169,14 @@ def editPerformanceLevel(source, level, frequency, voltage):
             0, 8)), "Core Performance Level betwen 0 and 7."
         result = runDVFSscript("-L " + str(level) + " -F " + str(frequency) +
                                " -V " + str(voltage))
-        if "ERROR" in result.stdout:
+        if "ERROR" in result:
             return False
     elif source == "mem":
         assert level in list(range(
             0, 4)), "Core Performance Level betwen 0 and 3."
         result = runDVFSscript("-l " + str(level) + " -f " + str(frequency) +
                                " -v " + str(voltage))
-        if "ERROR" in result.stdout:
+        if "ERROR" in result:
             return False
     else:
         print("Not valid source used - core or mem")
@@ -192,12 +209,13 @@ def currentPerfLevel():
     result = runBashCommand("rocm-smi")
     core = -1
     mem = -1
-    line = result.stdout.split('\n')
+    line = result.split('\n')
     line = line[5].split(" ")
     # Find indices of Core and Mem frequency
     indices = [i for i, s in enumerate(line) if 'Mhz' in s]
     core = line[indices[0]].replace("Mhz", '')
     mem = line[indices[1]].replace("Mhz", '')
+
     return CoreFreq.index(core), MemoryFreq.index(mem)
 
 
@@ -210,7 +228,7 @@ def appendCurrentTemp(file):
         temp - current GPU temperature.
     """
     result = runBashCommand("rocm-smi")
-    line = result.stdout.split('\n')[5]
+    line = result.split('\n')[5]
     # Find temperature
     temp = re.search(r"..\..c", line).group()
 
@@ -229,19 +247,18 @@ def currentVoltageIsRespected(currentVolt):
         True if the current applied voltage respects the
         intended one.
     """
-<<<<<<< HEAD
-    result = runBashCommand("rocm-smi --showvoltage")
+
+    result = runBashCommand("rocm-smi --showvoltage --json")
     # Find core voltage
-    volt = re.search(r"(mV) (.*?)\n", line).group()
-    print(volt)
-    exit()
-=======
-    result = runBashCommand("rocm-smi --showvoltages")
-    # Find core voltage
-    volt = re.search(r"(.*?) mV", line).group()
->>>>>>> 944827c512597ee3676ff28ccf8488c7beb3e447
-    if abs(volt - currentVolt) < 5:
+    try:
+        volt= json.loads(result)["card1"]["Voltage (mV)"]
+    except:
+        print("Not able to get voltage")
+        return False, -1
+
+    if abs(int(volt) - int(currentVolt)) < 5:
         return True, volt
+
     return False, volt
 
 # Parser to collect user given arguments
@@ -325,20 +342,20 @@ print()
 
 # Reset GPU Power Table
 result = runBashCommand("rocm-smi -r")
-if "Successfully" not in result.stdout:
+if "Successfully" not in result:
     print("Not able to reset GPU")
     exit()
 
 # Set GPU fan to 100%
 result = runBashCommand("rocm-smi --setfan 255")
-if "Successfully" not in result.stdout:
+if "Successfully" not in result:
     print("Not able to set fan")
     exit()
 
 # Disable DVFS
 result = runBashCommand("rocm-smi --setperflevel manual")
 
-if "Successfully" not in result.stdout:
+if "Successfully" not in result:
     print("Not able to set manual performance level")
     exit()
 if args.config is not None:
@@ -370,13 +387,13 @@ if args.config is not None:
                     Mem.append([int(n) for n in outputLine.replace('\n', '').split(",")])
     for pair in Core:
         a, b = pair
-        CoreFreq.append(a)
-        CoreVoltage.append(b)
+        CoreFreq.append(str(a))
+        CoreVoltage.append(str(b))
 
     for pair in Mem:
         a, b = pair
-        MemoryFreq.append(a)
-        MemoryVoltage.append(b)
+        MemoryFreq.append(str(a))
+        MemoryVoltage.append(str(b))
 
     if editAllPerformanceLevels() == False:
         print("not able to update table for current run")
@@ -385,7 +402,7 @@ else:
     # Get the current power table
     process = runBashCommand("rocm-smi -S")
     i = 0
-    for line in process.stdout.split('\n'):
+    for line in process.split('\n'):
         if i > 4 and i < 13:
             CoreFreq.append(line.replace(':', '').split()[2].replace("Mhz", ''))
             CoreVoltage.append(line.replace(':', '').split()[3].replace("mV", ''))
@@ -499,11 +516,10 @@ elif args.c == 1:
 
                     # Checks if the intended voltage is correctly applied to the GPU
                     result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)])
+                    print(result, volt)
+                    exit()
                     if result == False:
-<<<<<<< HEAD
                         print("Current voltage is %d != %d" % (int(volt), int(levels)))
-=======
->>>>>>> 944827c512597ee3676ff28ccf8488c7beb3e447
                         continue
                 else:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
@@ -612,6 +628,6 @@ else:
 
 # GPU fan automatic
 result = runBashCommand("rocm-smi --resetfans")
-if "Successfully" not in result.stdout:
+if "Successfully" not in result:
     print("Not able to set fan")
     exit()
