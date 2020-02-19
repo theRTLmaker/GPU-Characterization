@@ -229,11 +229,17 @@ def currentVoltageIsRespected(currentVolt):
         True if the current applied voltage respects the
         intended one.
     """
+<<<<<<< HEAD
     result = runBashCommand("rocm-smi --showvoltage")
     # Find core voltage
     volt = re.search(r"(mV) (.*?)\n", line).group()
     print(volt)
     exit()
+=======
+    result = runBashCommand("rocm-smi --showvoltages")
+    # Find core voltage
+    volt = re.search(r"(.*?) mV", line).group()
+>>>>>>> 944827c512597ee3676ff28ccf8488c7beb3e447
     if abs(volt - currentVolt) < 5:
         return True, volt
     return False, volt
@@ -494,7 +500,10 @@ elif args.c == 1:
                     # Checks if the intended voltage is correctly applied to the GPU
                     result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)])
                     if result == False:
+<<<<<<< HEAD
                         print("Current voltage is %d != %d" % (int(volt), int(levels)))
+=======
+>>>>>>> 944827c512597ee3676ff28ccf8488c7beb3e447
                         continue
                 else:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
