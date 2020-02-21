@@ -234,7 +234,7 @@ def appendCurrentTemp(file):
 
     print("File ", file)
     with open(file, "a+") as benchFile:
-        benchFile.write("Temperature: " + str(temp.replace("c", " c")))
+        benchFile.write("Temperature: " + str(temp.replace("c", " c")) + "\n")
 
     return temp
 
@@ -261,6 +261,28 @@ def currentVoltageIsRespected(currentVolt):
 
     return False, volt
 
+def preDVFSconfig():
+    # Enables Overdrive
+    result = runBashCommand("rocm-smi --autorespond y --setoverdrive 20")
+    if "Successfully" not in result:
+        print("Not able to reset GPU")
+        exit()
+
+    result = runBashCommand("rocm-smi --autorespond y --setpoweroverdrive 320")
+    if "Successfully" not in result:
+        print("Not able to reset GPU")
+        exit()
+
+    # Set Core performance level to the one to be tested
+    if setPerformanceLevel("core", 0) == False:
+        print(" Not able to select core level.")
+        return False
+    # Set Memory performance level to the highest
+    if setPerformanceLevel("mem", 0) == False:
+        print(" Not able to select memory level.")
+        return False
+
+    return True
 # Parser to collect user given arguments
 parser = argparse.ArgumentParser(
     prog="exploreDVFS",
@@ -346,18 +368,30 @@ if "Successfully" not in result:
     print("Not able to reset GPU")
     exit()
 
+# Disable DVFS
+result = runBashCommand("rocm-smi --setperflevel manual")
+if "Successfully" not in result:
+    print("Not able to set manual performance level")
+    exit()
+
 # Set GPU fan to 100%
 result = runBashCommand("rocm-smi --setfan 255")
 if "Successfully" not in result:
     print("Not able to set fan")
     exit()
 
-# Disable DVFS
-result = runBashCommand("rocm-smi --setperflevel manual")
-
+# Enables Overdrive
+result = runBashCommand("rocm-smi --autorespond y --setoverdrive 20")
 if "Successfully" not in result:
-    print("Not able to set manual performance level")
+    print("Not able to reset GPU")
     exit()
+
+result = runBashCommand("rocm-smi --autorespond y --setpoweroverdrive 320")
+if "Successfully" not in result:
+    print("Not able to reset GPU")
+    exit()
+
+
 if args.config is not None:
     Core = []
     Mem = []
@@ -394,6 +428,15 @@ if args.config is not None:
         a, b = pair
         MemoryFreq.append(str(a))
         MemoryVoltage.append(str(b))
+
+    # Set Core performance level to the one to be tested
+    if setPerformanceLevel("core", 0) == False:
+        print(" Not able to select core level.")
+        exit()
+    # Set Memory performance level to the highest
+    if setPerformanceLevel("mem", 0) == False:
+        print(" Not able to select memory level.")
+        exit()
 
     if editAllPerformanceLevels() == False:
         print("not able to update table for current run")
@@ -491,6 +534,10 @@ elif args.c == 1:
             for i in range(0, args.tries):
                 # Places PowerPlay Table to current values
                 if args.reset == 1:
+                    if preDVFSconfig() == False:
+                        print("not able to update table for current run")
+                        continue
+
                     if editAllPerformanceLevels() == False:
                         print("not able to update table for current run")
                         continue
@@ -502,6 +549,10 @@ elif args.c == 1:
                 if setPerformanceLevel("mem", 3) == False:
                     print(" Not able to select memory level.")
                     continue
+
+                # Run warm up DVFS program
+                runBashCommand("./warm_up_GPU 2")
+
                 # Get current DVFS settings - to make sure it was correctly applyed
                 cur = currentPerfLevel()
                 if cur != (int(levels), 3):
@@ -517,7 +568,6 @@ elif args.c == 1:
                     # Checks if the intended voltage is correctly applied to the GPU
                     result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)])
                     print(result, volt)
-                    exit()
                     if result == False:
                         print("Current voltage is %d != %d" % (int(volt), int(levels)))
                         continue
@@ -535,7 +585,7 @@ elif args.c == 1:
         if args.v == 1:
             # Undervolt Core by 10mV
             for editLevel in range(0,8):
-                if int(CoreVoltage[editLevel]) - 10 > 810:
+                if int(CoreVoltage[editLevel]) - 10 >= 810:
                     CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - 10
                 else:
                     CoreVoltage[editLevel] = 800 + editLevel * 2
@@ -571,9 +621,13 @@ elif args.m == 1:
             for i in range(0, args.tries):
                 # Places PowerPlay Table to current values
                 if args.reset == 1:
+                    if preDVFSconfig() == False:
+                        print("not able to update table for current run")
+                        continue
                     if editAllPerformanceLevels() == False:
                         print("not able to update table for current run")
                         continue
+
                 # Set Core performance level to the one to be tested
                 if setPerformanceLevel("core", 7) == False:
                     print(" Not able to select core level.")
@@ -582,6 +636,10 @@ elif args.m == 1:
                 if setPerformanceLevel("mem", int(levels)) == False:
                     print(" Not able to select memory level.")
                     continue
+
+                # Run warm up DVFS program
+                runBashCommand("./warm_up_GPU 2")
+
                 # Get current DVFS settings - to make sure it was correctly applyed
                 cur = currentPerfLevel()
                 if cur != (7, int(levels)):
@@ -593,6 +651,12 @@ elif args.m == 1:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
                         args.benchmark, folder, 7, levels, "MemoryExploration",
                         "Voltage")
+                    # Checks if the intended voltage is correctly applied to the GPU
+                    result, volt = currentVoltageIsRespected(CoreVoltage[7])
+                    print(result, volt)
+                    if result == False:
+                        print("Current voltage is %d != %d" % (int(volt), 7))
+                        continue
                 else:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
                         args.benchmark, folder, 7, levels, "MemoryExploration",
@@ -606,7 +670,7 @@ elif args.m == 1:
         if args.v == 1:
             # Undervolt Memory by 10mV
             for editLevel in range(0,4):
-                if int(MemoryVoltage[editLevel]) - 10 > 810:
+                if int(MemoryVoltage[editLevel]) - 10 >= 810:
                     MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - 10
                 else:
                     MemoryVoltage[editLevel] = 800 + editLevel * 2

@@ -2,6 +2,7 @@ import argparse
 import re
 import glob
 import pandas as pd
+import numpy as np
 
 # import xlsxwriter as xl
 # import numpy as  np
@@ -9,8 +10,8 @@ import pandas as pd
 
 # Default DVFS values
 defaultCore = [(852, 800), (991, 900), (1138, 950), (1269, 1000), (1348, 1050),
-               (1440, 1100), (1528, 1150), (1600, 1200)]
-defaultMemory = [(167, 800), (500, 900), (800, 950), (945, 1000)]
+               (1440, 1100), (1528, 1150), (1601, 1200)]
+defaultMemory = [(167, 800), (500, 900), (800, 950), (946, 1000)]
 
 
 def colnum_string(n):
@@ -161,6 +162,7 @@ for f in files:
             Benchmark[int(benchmarkType)] = []
         Benchmark[int(benchmarkType)].append(params)
     except:
+        continue
         if benchmarkType not in Benchmark:
             Benchmark[benchmarkType] = []
         Benchmark[benchmarkType].append(params)
@@ -209,9 +211,30 @@ for key, value in Benchmark.items():
     ],
                                 inplace=True)
 
-    # Compute data analysis collumns
-    for var, analysisList in varAnalysis.items():
-        for analysis in analysisList[0]:
+
+    # Outliers removal
+    # Go through every row of the dataframe and remove all the values that are on the 5% bigger and smaller
+    for index, row in Benchmark_dt[key].iterrows():
+        # Check for every variable that is going to suffer analysis, what are the outliers
+        # Everytime that one experiment is selected as outlier for one variable, that experiment is removed
+        # From all variables
+        mask = None
+        for var, analysisList in varAnalysis.items():
+            # Gets the collums name of collumns containing the general name in var
+            cols = [
+                col for col in Benchmark_dt[key]
+                if var in col and not any(sb in col for sb in [
+                    "average", "median", "min", "max", "mode", "boolean",
+                    "delta"
+                ])
+            ]            
+            if mask is not None:
+                mask = mask.values & row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95)).values
+            else:
+                mask = row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95))
+        notMask = [not boolean for boolean in mask]
+        # Remove the invalid run from all types of data collected for that row
+        for var in outputNameVars:
             # Gets the collums name of collumns containing the general name in var
             cols = [
                 col for col in Benchmark_dt[key]
@@ -220,6 +243,20 @@ for key, value in Benchmark.items():
                     "delta"
                 ])
             ]
+            Benchmark_dt[key].at[index, cols] = row[cols].where(mask, other=np.NaN)
+            
+    # Compute data analysis collumns
+    for var, analysisList in varAnalysis.items():
+        # Remove outliers
+        # Gets the collums name of collumns containing the general name in var
+        cols = [
+            col for col in Benchmark_dt[key]
+            if var in col and not any(sb in col for sb in [
+                "average", "median", "min", "max", "mode", "boolean",
+                "delta"
+            ])
+        ]
+        for analysis in analysisList[0]:
             if analysis == "average":
                 Benchmark_dt[key][
                     str(var) + " " +
