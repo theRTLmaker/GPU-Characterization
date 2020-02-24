@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/types.h> 
+#include <unistd.h> 
+#include <sys/wait.h>
+#include <signal.h>
 
 #include "../lcutil.h"
 
@@ -119,119 +123,139 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-	// Computes the total size in bits
-	sizeB *= 1024;
-	size = sizeB/(int)sizeof(int);
-
-	printf("sizeB %d size %d\n", sizeB, size);
-
-	if(size >= 1024) {
-		if(size % 1024 != 0) {
-			printf("Size not divisible by 1024!!!\n");
-			exit(1);
+	int pid = fork();
+	if(pid == 0) {
+		char *args[4];
+		std::string gpowerSAMPLER = "gpowerSAMPLER";
+		std::string e = "-e";
+		std::string time_string = "-s 1";
+		args[0] = (char *) gpowerSAMPLER.c_str();
+		args[1] = (char *) e.c_str();
+		args[2] = (char *) time_string.c_str();
+		args[3] = NULL;
+		if( execvp(args[0], args) == -1) {
+			printf("Error lauching gpowerSAMPLER.\n");
 		}
-	}
-
-	hipSetDevice(deviceNum);
-
-	double n_time[ntries][2], value[ntries][4];
-
-
-	// DRAM Memory Capacity
-	size_t freeCUDAMem, totalCUDAMem;
-	HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
-
-	HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
-
-	// Kernel Config
-	if(size < 1024) {
-		THREADS = size;
-		BLOCKS = 1;
+		exit(0);
 	}
 	else {
-		THREADS = 1024;
-		BLOCKS = size/1024;
-	}	
+		// Computes the total size in bits
+		sizeB *= 1024;
+		size = sizeB/(int)sizeof(int);
 
-	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
-	
-	// Initialize Host Memory
-	int *hostIn = (int *) malloc(size * sizeof(int));
-	int *hostOut = (int *) calloc(size, sizeof(int));
+		printf("sizeB %d size %d\n", sizeB, size);
 
-	// Generates array of random numbers
-    srand((unsigned) time(NULL));
-    int sum = 0;
-	int random = 0;
-	// Initialize the input data
-	for (i = 0; i < size-1; i++) {
-		random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
-		hostIn[i] = random;
-		sum += random;
+		if(size >= 1024) {
+			if(size % 1024 != 0) {
+				printf("Size not divisible by 1024!!!\n");
+				exit(1);
+			}
+		}
+
+		hipSetDevice(deviceNum);
+
+		double n_time[ntries][2], value[ntries][4];
+
+		// DRAM Memory Capacity
+		size_t freeCUDAMem, totalCUDAMem;
+		HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
+
+		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
+
+		// Kernel Config
+		if(size < 1024) {
+			THREADS = size;
+			BLOCKS = 1;
+		}
+		else {
+			THREADS = 1024;
+			BLOCKS = size/1024;
+		}	
+
+		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
+		printf("Buffer size: %luMB\n", size*sizeof(int)/(1024*1024));
+		
+		// Initialize Host Memory
+		int *hostIn = (int *) malloc(size * sizeof(int));
+		int *hostOut = (int *) calloc(size, sizeof(int));
+
+		// Generates array of random numbers
+	    srand((unsigned) time(NULL));
+	    int sum = 0;
+		int random = 0;
+		// Initialize the input data
+		for (i = 0; i < size-1; i++) {
+			random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
+			hostIn[i] = random;
+			sum += random;
+		}
+		// Places the sum on the last vector position
+		hostIn[i] = sum;
+
+		// Initialize Host Memory
+		int* deviceIn;
+		int* deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		hipEvent_t start, stop;
+		kill(pid, SIGUSR1);
+		initializeEvents(&start, &stop);
+
+		// Transfer data from host to device
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		double MemCpyTime = finalizeEvents(start, stop);
+		kill(pid, SIGUSR2);
+		
+		// Resets the DVFS Settings
+		int status = system("rocm-smi -r");
+		status = system("./DVFS -P 7");
+		status = system("./DVFS -p 3");
+
+		for (i=0;i<1;i++){
+			runbench_warmup();
+		}
+		for (i=0;i<ntries;i++){
+			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
+			printf("Registered time: %f ms\n", n_time[0][0]);
+		}
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		// Transfer data from device to host
+		HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		HIP_SAFE_CALL(hipDeviceReset());
+
+		printf("MemCpyTime %f ms\n", MemCpyTime);
+
+		// Verification of data transfer
+		int sum_received = 0;
+		for (i = 0; i < size-1; i++) {
+			sum_received += hostOut[i];
+		}
+		printf("Result: ");
+		if(sum == sum_received && sum == hostOut[size-1]) {
+			printf("Correct\n");
+		}
+		else {
+			printf("Incorrect\n");
+		}
+
+		free(hostIn);
+		free(hostOut);
+
+		pid = wait(&status);
 	}
-	// Places the sum on the last vector position
-	hostIn[i] = sum;
-
-	// Initialize Host Memory
-	int* deviceIn;
-	int* deviceOut;
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	hipEvent_t start, stop;
-	initializeEvents(&start, &stop);
-
-	// Transfer data from host to device
-	HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	double MemCpyTime = finalizeEvents(start, stop);
-	
-	// Resets the DVFS Settings
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
-
-	for (i=0;i<1;i++){
-		runbench_warmup();
-	}
-	for (i=0;i<ntries;i++){
-		runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
-		printf("Registered time: %f ms\n", n_time[0][0]);
-	}
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	// Transfer data from device to host
-	HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	HIP_SAFE_CALL(hipDeviceReset());
-
-	printf("MemCpyTime %f ms\n", MemCpyTime);
-
-	// Verification of data transfer
-	int sum_received = 0;
-	for (i = 0; i < size-1; i++) {
-		sum_received += hostOut[i];
-	}
-	printf("Result: ");
-	if(sum == sum_received && sum == hostOut[size-1]) {
-		printf("Correct\n");
-	}
-	else {
-		printf("Incorrect\n");
-	}
-
-	free(hostIn);
-	free(hostOut);
 	return 0;
 }
