@@ -126,7 +126,7 @@ int main(int argc, char *argv[]){
 	int pid = fork();
 	if(pid == 0) {
 		char *args[4];
-		std::string gpowerSAMPLER = "gpowerSAMPLER";
+		std::string gpowerSAMPLER = "gpowerSAMPLER_peak";
 		std::string e = "-e";
 		std::string time_string = "-s 1";
 		args[0] = (char *) gpowerSAMPLER.c_str();
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]){
 		args[2] = (char *) time_string.c_str();
 		args[3] = NULL;
 		if( execvp(args[0], args) == -1) {
-			printf("Error lauching gpowerSAMPLER.\n");
+			printf("Error lauching gpowerSAMPLER_peak.\n");
 		}
 		exit(0);
 	}
@@ -246,10 +246,10 @@ int main(int argc, char *argv[]){
 		}
 		printf("Result: ");
 		if(sum == sum_received && sum == hostOut[size-1]) {
-			printf("Correct\n");
+			printf("True\n");
 		}
 		else {
-			printf("Incorrect\n");
+			printf("False\n");
 		}
 
 		free(hostIn);
