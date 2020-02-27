@@ -624,6 +624,10 @@ elif args.c == 1:
     while 1 in working:
         # Run the benchmark for the proposed levels
         for levels in args.levelscore:
+            # Check if level is still giving valid results
+            if working[levels] == 0:
+                continue
+            failedExec = 0
             # Run the benchmark multiple times
             i = 0
             while i < args.tries:
@@ -674,6 +678,11 @@ elif args.c == 1:
 
                 # Run the benchmark
                 result, output = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
+                if result == False:
+                    failedExec += 1
+                    if failedExec > 5:
+                        working[levels] = 0
+                        break;
                 i += 1
 
         if args.v == 1:
@@ -713,6 +722,8 @@ elif args.m == 1:
             failedExec = 0
             # Run the benchmark multiple times
             i = 0
+            failedPerfLevel = 0
+            failedVoltage = 0
             while i < args.tries:
                 print("Try number: ", i)
                 # Places PowerPlay Table to current values
@@ -740,6 +751,9 @@ elif args.m == 1:
                 cur = currentPerfLevel()
                 if cur != (7, int(levels)):
                     print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
+                    failedPerfLevel += 1
+                    if failedPerfLevel > 5:
+                        break
                     continue
 
                 # Command to be launch
@@ -752,6 +766,9 @@ elif args.m == 1:
                     print(result, volt)
                     if result == False:
                         print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[7]), int(MemoryVoltage[int(levelsMemory)])))
+                        failedVoltage += 1
+                        if failedVoltage > 5:
+                            break
                         continue
                 else:
                     commandBenchmark, fileBenchmark = benchmarkCommand(
@@ -762,9 +779,12 @@ elif args.m == 1:
                 result, output = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
                 if result == False:
                     failedExec += 1
-                    if failedExec > 9:
+                    if failedExec > 5:
+                        working[levels] = 0
                         break;
                 i += 1
+                failedPerfLevel = 0
+                failedVoltage = 0
 
         if args.v == 1:
             # Undervolt Memory by 10mV
