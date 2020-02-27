@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/types.h> 
+#include <unistd.h> 
+#include <sys/wait.h>
+#include <signal.h>
 
 #include "../lcutil.h"
 
@@ -140,164 +144,192 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-	// Computes the total sizeB in bits
-	sizeB *= 1024;
-	size = sizeB/(int)sizeof(int);
-
-	if(size >= 1024) {
-		if(size % 1024 != 0) {
-			printf("sizeB not divisible by 1024!!!\n");
-			exit(1);
+	int pid = fork();
+	if(pid == 0) {
+		char *args[4];
+		std::string gpowerSAMPLER = "gpowerSAMPLER_peak";
+		std::string e = "-e";
+		std::string time_string = "-s 1";
+		args[0] = (char *) gpowerSAMPLER.c_str();
+		args[1] = (char *) e.c_str();
+		args[2] = (char *) time_string.c_str();
+		args[3] = NULL;
+		if( execvp(args[0], args) == -1) {
+			printf("Error lauching gpowerSAMPLER_peak.\n");
 		}
-	}
-
-	hipSetDevice(deviceNum);
-
-	double n_time[ntries][2], value[ntries][4];
-
-
-	// DRAM Memory Capacity
-	size_t freeCUDAMem, totalCUDAMem;
-	HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
-
-	HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
-
-	// Kernel Config
-	if(size < 1024) {
-		THREADS = size;
-		BLOCKS = 1;
+		exit(0);
 	}
 	else {
-		THREADS = 1024;
-		BLOCKS = size/1024;
-	}	
 
-	printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-	printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
-	
-	// Initialize Host Memory
-	int *hostIn = (int *) malloc(sizeB);
-	int **hostOut = (int **) malloc(10 * sizeof(int*));
-	for (int i = 0; i < 10; ++i)
-	{
-		hostOut[i] = (int *) calloc(size, sizeof(int));
-	}
+		// Computes the total sizeB in bits
+		sizeB *= 1024;
+		size = sizeB/(int)sizeof(int);
 
-	// Generates array of random numbers
-    srand((unsigned) time(NULL));
-    int sum = 0;
-	int random = 0;
-	// Initialize the input data
-	for (i = 0; i < size-1; i++) {
-		random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
-		hostIn[i] = random;
-		sum += random;
-	}
-	// Places the sum on the last vector position
-	hostIn[i] = sum;
-
-	// Initialize Host Memory
-	int *deviceIn, *deviceIn1, *deviceIn2, *deviceIn3, *deviceIn4, *deviceIn5, *deviceIn6, *deviceIn7, *deviceIn8, *deviceIn9;
-	int *deviceOut, *deviceOut1, *deviceOut2, *deviceOut3, *deviceOut4, *deviceOut5, *deviceOut6, *deviceOut7, *deviceOut8, *deviceOut9;
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn1, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn2, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn3, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn4, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn5, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn6, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn7, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn8, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceIn9, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut1, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut2, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut3, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut4, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut5, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut6, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut7, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut8, size * sizeof(int)));
-	HIP_SAFE_CALL(hipMalloc((void**)&deviceOut9, size * sizeof(int)));
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	hipEvent_t start, stop;
-	initializeEvents(&start, &stop);
-
-	// Transfer data from host to device
-	HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn1, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn2, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn3, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn4, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn5, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn6, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn7, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn8, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	HIP_SAFE_CALL(hipMemcpy(deviceIn9, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	double MemCpyTime = finalizeEvents(start, stop);
-	
-	// Resets the DVFS Settings
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
-
-	for (i=0;i<1;i++){
-		runbench_warmup();
-	}
-	for (i=0;i<ntries;i++){
-		runbench(&n_time[0][0],&value[0][0], deviceIn, deviceIn1, deviceIn2, deviceIn3, deviceIn4, deviceIn5, deviceIn6, deviceIn7, deviceIn8, deviceIn9,
-											 deviceOut, deviceOut1, deviceOut2, deviceOut3, deviceOut4, deviceOut5, deviceOut6, deviceOut7, deviceOut8, deviceOut9);
-		printf("Registered time: %f ms\n", n_time[0][0]);
-	}
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	// Transfer data from device to host
-	HIP_SAFE_CALL(hipMemcpy(hostOut[0], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[1], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[2], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[3], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[4], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[5], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[6], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[7], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[8], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-	HIP_SAFE_CALL(hipMemcpy(hostOut[9], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
-
-	// Synchronize in order to wait for memory operations to finish
-	HIP_SAFE_CALL(hipDeviceSynchronize());
-
-	HIP_SAFE_CALL(hipDeviceReset());
-
-	printf("MemCpyTime %f ms\n", MemCpyTime);
-
-	// Verification of data transfer
-	int sucess = 0;
-	for (int j = 0; j < 10; ++j)
-	{
-		int sum_received = 0;
-		for (i = 0; i < size-1; i++) {
-			sum_received += hostOut[j][i];
+		if(size >= 1024) {
+			if(size % 1024 != 0) {
+				printf("sizeB not divisible by 1024!!!\n");
+				exit(1);
+			}
 		}
-		if(sum == sum_received && sum == hostOut[j][size-1]) 
-			sucess++;
-	}
-	if(sucess == 10)
-		printf("Result: True\n");
-	else
-		printf("Result: False\n");
 
-	free(hostIn);
-	for (int i = 0; i < 10; ++i){
-		free(hostOut[i]);
+		hipSetDevice(deviceNum);
+
+		double n_time[ntries][2], value[ntries][4];
+
+
+		// DRAM Memory Capacity
+		size_t freeCUDAMem, totalCUDAMem;
+		HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
+
+		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
+
+		// Kernel Config
+		if(size < 1024) {
+			THREADS = size;
+			BLOCKS = 1;
+		}
+		else {
+			THREADS = 1024;
+			BLOCKS = size/1024;
+		}	
+
+		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
+		printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
+		
+		// Initialize Host Memory
+		int *hostIn = (int *) malloc(sizeB);
+		int **hostOut = (int **) malloc(10 * sizeof(int*));
+		for (int i = 0; i < 10; ++i)
+		{
+			hostOut[i] = (int *) calloc(size, sizeof(int));
+		}
+
+		// Generates array of random numbers
+	    srand((unsigned) time(NULL));
+	    int sum = 0;
+		int random = 0;
+		// Initialize the input data
+		for (i = 0; i < size-1; i++) {
+			random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
+			hostIn[i] = random;
+			sum += random;
+		}
+		// Places the sum on the last vector position
+		hostIn[i] = sum;
+
+		// Initialize Host Memory
+		int *deviceIn, *deviceIn1, *deviceIn2, *deviceIn3, *deviceIn4, *deviceIn5, *deviceIn6, *deviceIn7, *deviceIn8, *deviceIn9;
+		int *deviceOut, *deviceOut1, *deviceOut2, *deviceOut3, *deviceOut4, *deviceOut5, *deviceOut6, *deviceOut7, *deviceOut8, *deviceOut9;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn1, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn2, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn3, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn4, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn5, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn6, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn7, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn8, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn9, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut1, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut2, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut3, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut4, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut5, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut6, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut7, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut8, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut9, size * sizeof(int)));
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+		printf("Start Testing\n");
+		hipEvent_t start, stop;
+		kill(pid, SIGUSR1);
+		initializeEvents(&start, &stop);
+
+		// Transfer data from host to device
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn1, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn2, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn3, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn4, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn5, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn6, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn7, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn8, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn9, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		double MemCpyTime = finalizeEvents(start, stop);
+		kill(pid, SIGUSR2);
+
+		printf("End Testing\n");
+		
+		// Resets the DVFS Settings
+		int status = system("rocm-smi -r");
+		status = system("./DVFS -P 7");
+		status = system("./DVFS -p 3");
+
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		for (i=0;i<1;i++){
+			runbench_warmup();
+		}
+		for (i=0;i<ntries;i++){
+			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceIn1, deviceIn2, deviceIn3, deviceIn4, deviceIn5, deviceIn6, deviceIn7, deviceIn8, deviceIn9,
+												 deviceOut, deviceOut1, deviceOut2, deviceOut3, deviceOut4, deviceOut5, deviceOut6, deviceOut7, deviceOut8, deviceOut9);
+			printf("Registered time: %f ms\n", n_time[0][0]);
+		}
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		// Transfer data from device to host
+		HIP_SAFE_CALL(hipMemcpy(hostOut[0], deviceOut, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[1], deviceOut1, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[2], deviceOut2, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[3], deviceOut3, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[4], deviceOut4, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[5], deviceOut5, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[6], deviceOut6, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[7], deviceOut7, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[8], deviceOut8, size*sizeof(int), hipMemcpyDeviceToHost));
+		HIP_SAFE_CALL(hipMemcpy(hostOut[9], deviceOut9, size*sizeof(int), hipMemcpyDeviceToHost));
+
+		// Synchronize in order to wait for memory operations to finish
+		HIP_SAFE_CALL(hipDeviceSynchronize());
+
+		HIP_SAFE_CALL(hipDeviceReset());
+
+		printf("MemCpyTime %f ms\n", MemCpyTime);
+
+		// Verification of data transfer
+		int sucess = 0;
+		for (int j = 0; j < 10; ++j)
+		{
+			int sum_received = 0;
+			for (i = 0; i < size-1; i++) {
+				sum_received += hostOut[j][i];
+			}
+			if(sum == sum_received && sum == hostOut[j][size-1]) 
+				sucess++;
+			else
+				printf("sum: %d != sum_received: %d\n", sum, sum_received);
+		}
+		if(sucess == 10)
+			printf("Result: True .\n");
+		else
+			printf("Result: False .\n");
+
+		free(hostIn);
+		for (int i = 0; i < 10; ++i){
+			free(hostOut[i]);
+		}
+		free(hostOut);
+
+		pid = wait(&status);
 	}
-	free(hostOut);
 	return 0;
 }

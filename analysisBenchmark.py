@@ -95,7 +95,7 @@ outputNameVars = []
 varAnalysis = {}
 for idx, line in enumerate(expectedOutput):
     match = re.search(r"\{(.*?)\}", line)
-    expectedOutput[idx] = line[0:match.span()[0]:] + "(.*?)" + line[match.span()[1]::]
+    expectedOutput[idx] = (line[0:match.span()[0]:] + "(.*?)" + line[match.span()[1]::]).replace("\n", "")
     outputNameVars.append(re.sub(r'\([^)]*\)\)', '', match.groups()[0]))
     match = re.search(r"\((.*?)\((.*?)\)\)", match.groups()[0])
     if match is not None:
@@ -203,14 +203,13 @@ for key, value in Benchmark.items():
         ],
         ascending=[True, True, True, False, False, True, False, False],
         inplace=True)
-    Benchmark_dt[key].dropna(inplace=True)
+
+    # Benchmark_dt[key].dropna(inplace=True)
     Benchmark_dt[key].set_index([
         'target', 'object of study', 'core performance level',
         'core frequency', 'core voltage', 'memory performance level',
         'memory frequency', 'memory voltage'
-    ],
-                                inplace=True)
-
+    ], inplace=True)
 
     # Outliers removal
     # Go through every row of the dataframe and remove all the values that are on the 5% bigger and smaller
@@ -227,11 +226,12 @@ for key, value in Benchmark.items():
                     "average", "median", "min", "max", "mode", "boolean",
                     "delta"
                 ])
-            ]            
+            ]  
             if mask is not None:
-                mask = mask.values & row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95)).values
+                mask = mask & row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95)).values
             else:
-                mask = row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95))
+                mask = row[cols].between(row[cols].quantile(.05), row[cols].quantile(.95)).values
+            
         notMask = [not boolean for boolean in mask]
         # Remove the invalid run from all types of data collected for that row
         for var in outputNameVars:
@@ -280,20 +280,16 @@ for key, value in Benchmark.items():
             elif analysis == "boolean":
                 continue
             # Compute the delta
+            # print(Benchmark_dt[key][str(var) + " " + str(analysis)])
             for index, row in Benchmark_dt[key].iterrows():
                 pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
                        defaultCore[index[2]][1], index[5],
                        defaultMemory[index[5]][0], defaultMemory[index[5]][1])
-
-                Benchmark_dt[key].at[
-                    index, "delta " + str(var) + " " + str(analysis)] = (
-                        Benchmark_dt[key].at[index,
-                                             str(var) + " " + str(analysis)] -
-                        Benchmark_dt[key].at[pos,
-                                             str(var) + " " + str(analysis)]
-                    ) / Benchmark_dt[key].at[pos,
-                                             str(var) + " " +
-                                             str(analysis)] * 100
+                
+                Benchmark_dt[key].at[index, "delta " + str(var) + " " + str(analysis)] = (
+                        Benchmark_dt[key].at[index, str(var) + " " + str(analysis)] -
+                        Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)]
+                    ) / Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)] * 100
 
 
 # Write the values to the excel file
@@ -412,7 +408,7 @@ for key, value in Benchmark.items():
         ],
         ascending=[True, True, True, False, False, True, False, False],
         inplace=True)
-    Benchmark_dt[key_dt].dropna(inplace=True)
+    # Benchmark_dt[key_dt].dropna(inplace=True)
     Benchmark_dt[key_dt].set_index([
         'target', 'object of study', 'core performance level',
         'core frequency', 'core voltage', 'memory performance level',

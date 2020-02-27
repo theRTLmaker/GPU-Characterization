@@ -246,10 +246,10 @@ int main(int argc, char *argv[]){
 		}
 		printf("Result: ");
 		if(sum == sum_received && sum == hostOut[size-1]) {
-			printf("True\n");
+			printf("True .\n");
 		}
 		else {
-			printf("False\n");
+			printf("False .\n");
 		}
 
 		free(hostIn);
