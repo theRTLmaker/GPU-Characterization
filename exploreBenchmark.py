@@ -5,11 +5,24 @@ import os
 import re
 import sys
 import json
+import os
 
 CoreFreq = []
 CoreVoltage = []
 MemoryFreq = []
 MemoryVoltage = []
+
+def appendFileToFile(file, append):
+    fin = open(append, "r")
+    data2 = fin.read()
+    fin.close()
+    fout = open(file, "a")
+    fout.write(data2)
+    fout.close()
+
+    # Remove the append file
+    if os.path.exists(append):
+        os.remove(append)
 
 def runBashCommand(bashCommand):
     """Runs a bash command
@@ -111,7 +124,7 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
     with open(filePath, "a+") as output_file:
         output_file.write("\n")
         output_file.write("#################################################\n")
-        output_file.write("Execution: " + str(execution) + "\n")
+        output_file.write("Execution: " + str(execution) + " .\n")
     appendCurrentTemp(filePath)
     
     seconds = 45
@@ -145,7 +158,7 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
                 output_file.write("#################################################\n")
                 output_file.write("\n")
             print("\tSuccess", filePath)
-            return True, process.stdout
+            return True, process.stdout, process.returncode
     except subprocess.CalledProcessError as e:
         print()
         print("\tERROR: Execution %s ." % (str(e.returncode)))
@@ -158,11 +171,12 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
         print()
         with open(filePath, "a+") as output_file:
             output_file.write("Status: ERROR - Timeout .\n")
+
     with open(filePath, "a+") as output_file:
         output_file.write("#################################################\n")
         output_file.write("\n")
 
-    return False, None
+    return False, None, -1
 
 
 
@@ -331,6 +345,21 @@ def preDVFSconfig():
         return False
 
     return True
+
+def exportDVFStable():
+    global CoreFreq
+    global CoreVoltage
+    global MemoryFreq
+    global MemoryVoltage
+
+    file = open("currentDVFS.txt","w") 
+    for freq, volt in zip(CoreFreq, CoreVoltage):
+        file.write(str(freq) + "," + str(volt) + "\n") 
+    for freq, volt in zip(MemoryFreq, MemoryVoltage):
+        file.write(str(freq) + "," + str(volt) + "\n")      
+    file.close() 
+
+
 # Parser to collect user given arguments
 parser = argparse.ArgumentParser(
     prog="exploreDVFS",
@@ -343,6 +372,11 @@ parser.add_argument('-b',
                     help="Name of the benchmark",
                     required=True,
                     nargs='+')
+parser.add_argument('-e', '--experiment',
+                    const=1,
+                    default=0,
+                    action='store_const',
+                    help="The output of the benchmark determines if the run was sucessful")
 parser.add_argument('-r', '--reset',
                     const=1,
                     default=0,
@@ -503,6 +537,9 @@ else:
                 line.replace(':', '').split()[3].replace("mV", ''))
         i = i + 1
 
+# Export current DVFS Table
+exportDVFStable()
+
 # Checks if the benchmark exists and create a Results folder
 folder = str(args.benchmark[0][:args.benchmark[0].rfind('/')])
 if not os.path.isdir(folder) or not os.path.isfile(args.benchmark[0]):
@@ -613,6 +650,9 @@ if args.c == 1 and args.m == 1:
                 print("Failed to update level %d" % (levels))
                 workingMemory[levels] = 0
 
+        # Export current DVFS Table
+        exportDVFStable()
+
 # Exploration of Core
 elif args.c == 1:
     # Activates intended performance levels
@@ -677,7 +717,14 @@ elif args.c == 1:
                         "Frequency")
 
                 # Run the benchmark
-                result, output = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
+                if args.experiment == 1:
+                    # Run the benchmark
+                    result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
+                    if returncode == -1:
+                        break
+                    appendFileToFile(fileBenchmark, "output.txt")
+                else:
+                    result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
                 if result == False:
                     failedExec += 1
                     if failedExec > 5:
@@ -705,6 +752,9 @@ elif args.c == 1:
                 print("Failed to update level %d" % (levels))
                 working[levels] = 0
 
+        # Export current DVFS Table
+        exportDVFStable()
+
 # Exploration of Memory
 elif args.m == 1:
     # Activates intended performance levels
@@ -724,6 +774,7 @@ elif args.m == 1:
             i = 0
             failedPerfLevel = 0
             failedVoltage = 0
+            failedInside = 0
             while i < args.tries:
                 print("Try number: ", i)
                 # Places PowerPlay Table to current values
@@ -765,7 +816,7 @@ elif args.m == 1:
                     result, volt = currentVoltageIsRespected(CoreVoltage[7], MemoryVoltage[int(levels)])
                     print(result, volt)
                     if result == False:
-                        print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[7]), int(MemoryVoltage[int(levelsMemory)])))
+                        print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[7]), int(MemoryVoltage[int(levels)])))
                         failedVoltage += 1
                         if failedVoltage > 5:
                             break
@@ -775,8 +826,18 @@ elif args.m == 1:
                         args.benchmark, folder, 7, levels, "MemoryExploration",
                         "Frequency")
 
-                # Run the benchmark
-                result, output = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
+                if args.experiment == 1:
+                    # Run the benchmark
+                    result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
+                    if returncode == -1:
+                        failedInside += 1
+                        if failedInside > 5:
+                            break
+                        continue
+                    appendFileToFile(fileBenchmark, "output.txt")
+                else:
+                    # Run the benchmark
+                    result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
                 if result == False:
                     failedExec += 1
                     if failedExec > 5:
@@ -805,6 +866,9 @@ elif args.m == 1:
             if editPerformanceLevel("mem", levels, MemoryFreq[levels], MemoryVoltage[levels]) == False:
                 print("Failed to update level %d" % (levels))
                 working[levels] = 0
+
+        # Export current DVFS Table
+        exportDVFStable()
 
 else:
     print("No indication of exploration given [v:voltage, f:frequency]")

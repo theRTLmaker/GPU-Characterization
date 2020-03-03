@@ -3,6 +3,7 @@ import re
 import glob
 import pandas as pd
 import numpy as np
+import ast
 
 # import xlsxwriter as xl
 # import numpy as  np
@@ -13,6 +14,9 @@ defaultCore = [(852, 800), (991, 900), (1138, 950), (1269, 1000), (1348, 1050),
                (1440, 1100), (1528, 1150), (1601, 1200)]
 defaultMemory = [(167, 800), (500, 900), (800, 950), (946, 1000)]
 
+def countFalse(series):
+    series = series.fillna(False)
+    return (~series).sum()
 
 def colnum_string(n):
     string = ""
@@ -102,6 +106,11 @@ for idx, line in enumerate(expectedOutput):
         match = match.groups()
         varAnalysis[outputNameVars[-1]] = [str(match[0]).replace(" ", "").split(","), str(match[1])]
 
+ExecutionRegex = expectedOutput[0]
+ExecutionRegex = re.compile(ExecutionRegex)
+del expectedOutput[0]
+del outputNameVars[0]
+
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 
@@ -109,7 +118,7 @@ files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 Benchmark = {}
 
 # Number of executions of every benchmark
-numberOfExecutions = 0
+MaxnumberOfExecutions = 0
 
 # Run throw all the output files
 for f in files:
@@ -136,6 +145,50 @@ for f in files:
     params = dict(zip(fileNameVars, fileNameValues))
 
     # Open the file and search for the output content
+    numberOfExecutions = 0
+    with open(f, "r") as search:
+        line = search.readline()
+        while line != "":
+            value = ExecutionRegex.search(line)
+            if value is not None:
+                numberOfExecutions = int(value.groups()[0])
+            else:
+                for idx, regex in enumerate(expectedOutput):
+                    regex = re.compile(regex)
+                    value = regex.search(line)
+                    if value is not None:
+                        value = value.groups()[0]
+                        try:
+                            params[outputNameVars[idx] + " " +
+                                   str(numberOfExecutions)] = float(value)
+                        except:
+                            if "True" in value or "False" in value:
+                                params[outputNameVars[idx] + " " +
+                                   str(numberOfExecutions)] = ast.literal_eval(value)
+                            else:
+                                value = value.replace("\n", "")
+                                params[outputNameVars[idx] + " " +
+                                       str(numberOfExecutions)] = value.replace(
+                                           " ", "")
+                    else:
+                        if ExecutionRegex.search(line) != None:
+                            break
+            line = search.readline()
+
+    if numberOfExecutions > MaxnumberOfExecutions:
+        MaxnumberOfExecutions = numberOfExecutions
+    try:
+        if int(benchmarkType) not in Benchmark:
+            Benchmark[int(benchmarkType)] = []
+        Benchmark[int(benchmarkType)].append(params)
+    except:
+        continue
+        if benchmarkType not in Benchmark:
+            Benchmark[benchmarkType] = []
+        Benchmark[benchmarkType].append(params)
+
+'''
+    # Open the file and search for the output content
     with open(f, "r") as search:
         for idx, regex in enumerate(expectedOutput):
             numberOfExecutions = 0
@@ -157,15 +210,7 @@ for f in files:
                     numberOfExecutions = numberOfExecutions + 1
             search.seek(0)
 
-    try:
-        if int(benchmarkType) not in Benchmark:
-            Benchmark[int(benchmarkType)] = []
-        Benchmark[int(benchmarkType)].append(params)
-    except:
-        continue
-        if benchmarkType not in Benchmark:
-            Benchmark[benchmarkType] = []
-        Benchmark[benchmarkType].append(params)
+'''
 
 # Sort the benchmark types ascending
 temp = Benchmark.copy()
@@ -180,7 +225,7 @@ order = [
     'memory voltage'
 ]
 for value in outputNameVars:
-    for i in range(numberOfExecutions):
+    for i in range(MaxnumberOfExecutions + 1):
         order.append(value + " " + str(i))
 
 # Create a Pandas Excel writer using XlsxWriter as the engine.
@@ -211,6 +256,7 @@ for key, value in Benchmark.items():
         'memory frequency', 'memory voltage'
     ], inplace=True)
 
+    '''
     # Outliers removal
     # Go through every row of the dataframe and remove all the values that are on the 5% bigger and smaller
     for index, row in Benchmark_dt[key].iterrows():
@@ -223,7 +269,7 @@ for key, value in Benchmark.items():
             cols = [
                 col for col in Benchmark_dt[key]
                 if var in col and not any(sb in col for sb in [
-                    "average", "median", "min", "max", "mode", "boolean",
+                    "average", "median", "min", "max", "mode",
                     "delta"
                 ])
             ]  
@@ -239,12 +285,12 @@ for key, value in Benchmark.items():
             cols = [
                 col for col in Benchmark_dt[key]
                 if var in col and not any(sb in col for sb in [
-                    "average", "median", "min", "max", "mode", "boolean",
+                    "average", "median", "min", "max", "mode",
                     "delta"
                 ])
             ]
             Benchmark_dt[key].at[index, cols] = row[cols].where(mask, other=np.NaN)
-            
+    '''     
     # Compute data analysis collumns
     for var, analysisList in varAnalysis.items():
         # Remove outliers
@@ -278,18 +324,20 @@ for key, value in Benchmark.items():
                     str(var) + " " +
                     str(analysis)] = Benchmark_dt[key][cols].mode(axis=1)
             elif analysis == "boolean":
-                continue
+                Benchmark_dt[key][
+                    str(var) + " " +
+                    str(analysis)] = Benchmark_dt[key][cols].apply(func=lambda row: countFalse(row), axis=1)
             # Compute the delta
-            # print(Benchmark_dt[key][str(var) + " " + str(analysis)])
-            for index, row in Benchmark_dt[key].iterrows():
-                pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
-                       defaultCore[index[2]][1], index[5],
-                       defaultMemory[index[5]][0], defaultMemory[index[5]][1])
-                
-                Benchmark_dt[key].at[index, "delta " + str(var) + " " + str(analysis)] = (
-                        Benchmark_dt[key].at[index, str(var) + " " + str(analysis)] -
-                        Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)]
-                    ) / Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)] * 100
+            if analysis != "boolean":
+                for index, row in Benchmark_dt[key].iterrows():
+                    pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
+                           defaultCore[index[2]][1], index[5],
+                           defaultMemory[index[5]][0], defaultMemory[index[5]][1])
+                    # print(key, pos)
+                    Benchmark_dt[key].at[index, "delta " + str(var) + " " + str(analysis)] = (
+                            Benchmark_dt[key].at[index, str(var) + " " + str(analysis)] -
+                            Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)]
+                        ) / Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)] * 100
 
 
 # Write the values to the excel file
@@ -314,6 +362,7 @@ for key, value in Benchmark.items():
     i = 0
     # Run over the variable analysis to be computed
     for var, analysisList in varAnalysis.items():
+        analysisList[0] = [ x for x in analysisList[0] if "boolean" not in x ]
         # Run over the types of analysis to performed
         for analysis in analysisList[0]:
             j = 0
@@ -392,7 +441,7 @@ for key, value in Benchmark.items():
                 totalEntriesPerPair += numberOfEntries
             i += 1
 
-
+'''
 # Create a pandas dataframe for every benchmark type
 # Sort the values by performance level, frequency and voltage for the core and memory
 Benchmark_dt = {}
@@ -427,6 +476,7 @@ for key, value in Benchmark.items():
                 "delta"
             ])
         ]
+        print(analysisList[0])
         for analysis in analysisList[0]:
             if analysis == "average":
                 Benchmark_dt[key_dt][
@@ -449,7 +499,9 @@ for key, value in Benchmark.items():
                     str(var) + " " +
                     str(analysis)] = Benchmark_dt[key_dt][cols].mode(axis=1)
             elif analysis == "boolean":
-                continue
+                Benchmark_dt[key][
+                    str(var) + " " +
+                    str(analysis)] = (~Benchmark_dt[key][cols]).sum()
             # Compute the delta
             for index, row in Benchmark_dt[key_dt].iterrows():
                 pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
@@ -568,4 +620,5 @@ for key, value in Benchmark.items():
                     j += 1
                 totalEntriesPerPair += numberOfEntries
             i += 1
+'''
 writer.save()
