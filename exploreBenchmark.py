@@ -6,11 +6,17 @@ import re
 import sys
 import json
 import os
+import time
 
 CoreFreq = []
 CoreVoltage = []
 MemoryFreq = []
 MemoryVoltage = []
+
+def removeFile(file):
+    # Remove the file
+    if os.path.exists(file):
+        os.remove(file)
 
 def appendFileToFile(file, append):
     fin = open(append, "r")
@@ -61,6 +67,14 @@ def runBashCommand(bashCommand):
         print("\tERROR: Timeout warmup")
         print()
 
+def getCurrentTemp():
+    result = runBashCommand("rocm-smi")
+    line = result.split('\n')[5]
+    # Find temperature
+    temp = float(re.search(r"..\..c", line).group().replace("c", ""))
+
+    return temp
+
 def appendCurrentTemp(file):
     """Writes the current GPU Temperature to an file
 
@@ -78,6 +92,11 @@ def appendCurrentTemp(file):
         benchFile.write("Temperature: " + str(temp.replace("c", " c")) + "\n")
 
     return temp
+
+def appendStringToFile(string, file):
+    assert type(string) is str 
+    with open(file, "a+") as benchFile:
+        benchFile.write(string + "\n")
 
 def benchmarkCommand(benchmark, folder, levelCore, levelMem, typeEx, explore):
     """Constructs the bash command with default naming scheme
@@ -176,7 +195,7 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
         output_file.write("#################################################\n")
         output_file.write("\n")
 
-    return False, None, -1
+    return False, None, 0
 
 
 
@@ -315,25 +334,39 @@ def currentVoltageIsRespected(currentVoltCore, currentVoltMemory):
         print("Not able to get voltage")
         return False, -1
 
-    if abs(int(volt) - int(currentVoltCore)) < 5:
+    if abs(int(volt) - int(currentVoltCore)) <= 5:
         return True, volt
 
-    if abs(int(volt) - int(currentVoltMemory)) < 5:
+    if abs(int(volt) - int(currentVoltMemory)) <= 5:
         return True, volt
 
     return False, volt
 
-def preDVFSconfig():
-    # Enables Overdrive
-    result = runBashCommand("rocm-smi --autorespond y --setoverdrive 20")
-    if "Successfully" not in result:
-        print("Not able to reset GPU")
-        exit()
+def getOverdrive():
+    result = runBashCommand("rocm-smi")
+    line = result.split('\n')[5]
+    line = line[20:]
+    # Find powercap value
+    powercap = re.search(r"...\..W", line).group()
+    powercap = float(powercap.replace("W", ""))
 
-    result = runBashCommand("rocm-smi --autorespond y --setpoweroverdrive 320")
-    if "Successfully" not in result:
-        print("Not able to reset GPU")
-        exit()
+    return powercap
+
+def setOverDrive():
+    if getOverdrive() != float(320):
+        # Enables Overdrive
+        result = runBashCommand("rocm-smi --autorespond y --setoverdrive 20")
+        if "Successfully" not in result:
+            print("Not able to reset GPU")
+            exit()
+
+        result = runBashCommand("rocm-smi --autorespond y --setpoweroverdrive 320")
+        if "Successfully" not in result:
+            print("Not able to reset GPU")
+            exit()
+
+def preDVFSconfig():
+    setOverDrive()
 
     # Set Core performance level to the one to be tested
     if setPerformanceLevel("core", 0) == False:
@@ -359,6 +392,16 @@ def exportDVFStable():
         file.write(str(freq) + "," + str(volt) + "\n")      
     file.close() 
 
+def setFan(value):
+    assert type(value) is int
+    assert value < 256
+    assert value >= 0
+    
+    # Set GPU fan to 100%
+    result = runBashCommand("rocm-smi --setfan " + str(value))
+    if "Successfully" not in result:
+        print("Not able to set fan")
+        exit()
 
 # Parser to collect user given arguments
 parser = argparse.ArgumentParser(
@@ -457,10 +500,7 @@ if "Successfully" not in result:
     exit()
 
 # Set GPU fan to 100%
-result = runBashCommand("rocm-smi --setfan 255")
-if "Successfully" not in result:
-    print("Not able to set fan")
-    exit()
+setFan(255)
 
 # Enables Overdrive
 result = runBashCommand("rocm-smi --autorespond y --setoverdrive 20")
@@ -667,11 +707,25 @@ elif args.c == 1:
             # Check if level is still giving valid results
             if working[levels] == 0:
                 continue
-            failedExec = 0
             # Run the benchmark multiple times
             i = 0
+            failedExec = 0
+            failedPerfLevel = 0
+            failedVoltage = 0
+            failedInside = 0
             while i < args.tries:
                 print("Try number: ", i)
+                # Set GPU fan to 100%
+                setFan(255)
+                curTemp = getCurrentTemp()
+                print("Current Temperature: ", curTemp)
+                while curTemp > float(45):
+                    # Set GPU fan to 100%
+                    setFan(255)
+                    time.sleep(2)
+                    curTemp = getCurrentTemp()
+                    print("Current Temperature: ", curTemp)
+
                 # Places PowerPlay Table to current values
                 if args.reset == 1:
                     if preDVFSconfig() == False:
@@ -693,44 +747,62 @@ elif args.c == 1:
                 # Run warm up DVFS program
                 runBashCommand("./warmup")
 
+                # Guarantee that a reset on the GPU doesn't reset the overdrive settings
+                setOverDrive()
+
                 # Get current DVFS settings - to make sure it was correctly applyed
                 cur = currentPerfLevel()
                 if cur != (int(levels), 3):
                     print(" Selected Performance Levels don't match current ones. %s != (%d, 3)" % (cur, int(levels)))
+                    failedPerfLevel += 1
+                    if failedPerfLevel > 5:
+                        appendStringToFile("failedPerfLevel", fileBenchmark)
+                        break
                     continue
 
                 # Command to be launch
                 if args.v == 1:
-                    commandBenchmark, fileBenchmark = benchmarkCommand(
-                        args.benchmark, folder, levels, 3, "CoreExploration",
-                        "Voltage")
+                    commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Voltage")
 
                     # Checks if the intended voltage is correctly applied to the GPU
                     result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)], MemoryVoltage[3])
                     print(result, volt)
                     if result == False:
                         print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[int(levelsCore)]), int(MemoryVoltage[3])))
+                        failedVoltage += 1
+                        if failedVoltage > 5:
+                            appendStringToFile("failedVoltage", fileBenchmark)
+                            break
                         continue
                 else:
-                    commandBenchmark, fileBenchmark = benchmarkCommand(
-                        args.benchmark, folder, levels, 3, "CoreExploration",
-                        "Frequency")
+                    commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, levels, 3, "CoreExploration", "Frequency")
 
                 # Run the benchmark
                 if args.experiment == 1:
+                    # Remove temp file to guarantee that no trash is in it
+                    removeFile("output.txt")
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
                     if returncode == -1:
-                        break
+                        failedInside += 1
+                        if failedInside > 5:
+                            appendStringToFile("failedInside", fileBenchmark)
+                            break
+                        continue
                     appendFileToFile(fileBenchmark, "output.txt")
                 else:
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
+
                 if result == False:
                     failedExec += 1
                     if failedExec > 5:
                         working[levels] = 0
+                        appendStringToFile("failedExec", fileBenchmark)
                         break;
+                
                 i += 1
+                failedPerfLevel = 0
+                failedVoltage = 0
 
         if args.v == 1:
             # Undervolt Core by 10mV
@@ -769,14 +841,24 @@ elif args.m == 1:
             # Check if level is still giving valid results
             if working[levels] == 0:
                 continue
-            failedExec = 0
             # Run the benchmark multiple times
             i = 0
+            failedExec = 0
             failedPerfLevel = 0
             failedVoltage = 0
             failedInside = 0
             while i < args.tries:
                 print("Try number: ", i)
+                # Set GPU fan to 100%
+                setFan(255)
+                curTemp = getCurrentTemp()
+                print("Current Temperature: ", curTemp)
+                while curTemp > float(45):
+                    # Set GPU fan to 100%
+                    setFan(255)
+                    time.sleep(2)
+                    curTemp = getCurrentTemp()
+                    print("Current Temperature: ", curTemp)
                 # Places PowerPlay Table to current values
                 if args.reset == 1:
                     if preDVFSconfig() == False:
@@ -798,12 +880,16 @@ elif args.m == 1:
                 # Run warm up DVFS program
                 runBashCommand("./warmup")
 
+                # Guarantee that a reset on the GPU doesn't reset the overdrive settings
+                setOverDrive()
+
                 # Get current DVFS settings - to make sure it was correctly applyed
                 cur = currentPerfLevel()
                 if cur != (7, int(levels)):
                     print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
                     failedPerfLevel += 1
                     if failedPerfLevel > 5:
+                        appendStringToFile("failedPerfLevel", fileBenchmark)
                         break
                     continue
 
@@ -818,7 +904,8 @@ elif args.m == 1:
                     if result == False:
                         print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[7]), int(MemoryVoltage[int(levels)])))
                         failedVoltage += 1
-                        if failedVoltage > 5:
+                        if failedVoltage > 5:                            
+                            appendStringToFile("failedVoltage", fileBenchmark)
                             break
                         continue
                 else:
@@ -827,11 +914,14 @@ elif args.m == 1:
                         "Frequency")
 
                 if args.experiment == 1:
+                    # Remove temp file to guarantee that no trash is in it
+                    removeFile("output.txt")
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
                     if returncode == -1:
                         failedInside += 1
                         if failedInside > 5:
+                            appendStringToFile("failedInside", fileBenchmark)
                             break
                         continue
                     appendFileToFile(fileBenchmark, "output.txt")
@@ -842,6 +932,7 @@ elif args.m == 1:
                     failedExec += 1
                     if failedExec > 5:
                         working[levels] = 0
+                        appendStringToFile("failedExec", fileBenchmark)
                         break;
                 i += 1
                 failedPerfLevel = 0

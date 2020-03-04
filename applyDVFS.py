@@ -213,10 +213,10 @@ def currentVoltageIsRespected(currentVoltCore, currentVoltMemory):
         print("Not able to get voltage")
         return False, -1
 
-    if abs(int(volt) - int(currentVoltCore)) < 5:
+    if abs(int(volt) - int(currentVoltCore)) <= 5:
         return True, volt
 
-    if abs(int(volt) - int(currentVoltMemory)) < 5:
+    if abs(int(volt) - int(currentVoltMemory)) <= 5:
         return True, volt
 
     return False, volt

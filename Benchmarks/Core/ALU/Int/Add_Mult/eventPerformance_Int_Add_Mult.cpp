@@ -11,7 +11,7 @@
 #include "../../../../../lcutil.h"
 
 
-#define COMP_ITERATIONS (4096*4) //512
+#define COMP_ITERATIONS (4096) //512
 #define REGBLOCK_sizeB (4)
 #define UNROLL_ITERATIONS (32)
 #define THREADS_WARMUP (1024)
@@ -59,10 +59,10 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r0 * r0 + r1;//r0;
+			r1 = r1 * r1 + r2;//r1;
+			r2 = r2 * r2 + r3;//r2;
+			r3 = r3 * r3 + r0;//r3;
 		}
 	}
 
