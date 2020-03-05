@@ -1,0 +1,17 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+# Unignore Makefiles
+!Makefile
+
+# Ignore Object files
+*.o
+
+# Outputs of the benchmarks
+**/Results

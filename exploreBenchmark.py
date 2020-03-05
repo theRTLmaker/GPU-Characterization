@@ -463,6 +463,12 @@ parser.add_argument('-t',
                     help="Number of times to perform the benchmark",
                     type=int,
                     choices=range(0, 51))
+parser.add_argument('-s',
+                    '--step',
+                    default=10,
+                    help="Step between runs",
+                    type=int,
+                    choices=range(5, 51))
 parser.add_argument('--config',
                     metavar='path',
                     type=str,
@@ -658,8 +664,8 @@ if args.c == 1 and args.m == 1:
         if args.v == 1:
             # Undervolt Core by 10mV
             for editLevel in range(0,8):
-                if int(CoreVoltage[editLevel]) - 10 >= 810:
-                    CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - 10
+                if int(CoreVoltage[editLevel]) - args.step >= 810:
+                    CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - args.step
                 else:
                     CoreVoltage[editLevel] = 800 + editLevel * 2
                     if lastCore[editLevel] == 1:
@@ -668,8 +674,8 @@ if args.c == 1 and args.m == 1:
 
             # Undervolt Memory by 10mV
             for editLevel in range(0,4):
-                if int(MemoryVoltage[editLevel]) - 10 >= 810:
-                    MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - 10
+                if int(MemoryVoltage[editLevel]) - args.step >= 810:
+                    MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - args.step
                 else:
                     MemoryVoltage[editLevel] = 800 + editLevel * 2
                     if lastMemory[editLevel] == 1:
@@ -677,7 +683,7 @@ if args.c == 1 and args.m == 1:
                     lastMemory[editLevel] = 1
         else:
             # Overclock all levels Core by 10Hz
-            CoreFreq = [int(volt) + 10 for volt in CoreFreq]
+            CoreFreq = [int(volt) + args.step for volt in CoreFreq]
 
         # Apply new Power Table Settings
         for levels in range(0, 8):
@@ -807,8 +813,8 @@ elif args.c == 1:
         if args.v == 1:
             # Undervolt Core by 10mV
             for editLevel in range(0,8):
-                if int(CoreVoltage[editLevel]) - 10 >= 810:
-                    CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - 10
+                if int(CoreVoltage[editLevel]) - args.step >= 810:
+                    CoreVoltage[editLevel] = int(CoreVoltage[editLevel]) - args.step
                 else:
                     CoreVoltage[editLevel] = 800 + editLevel * 2
                     if last[editLevel] == 1:
@@ -816,7 +822,7 @@ elif args.c == 1:
                     last[editLevel] = 1
         else:
             # Overclock all levels Core by 10Hz
-            CoreFreq = [int(volt) + 10 for volt in CoreFreq]
+            CoreFreq = [int(volt) + args.step for volt in CoreFreq]
 
         # Apply new Power Table Settings
         for levels in range(0, 8):
@@ -895,9 +901,7 @@ elif args.m == 1:
 
                 # Command to be launch
                 if args.v == 1:
-                    commandBenchmark, fileBenchmark = benchmarkCommand(
-                        args.benchmark, folder, 7, levels, "MemoryExploration",
-                        "Voltage")
+                    commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Voltage")
                     # Checks if the intended voltage is correctly applied to the GPU
                     result, volt = currentVoltageIsRespected(CoreVoltage[7], MemoryVoltage[int(levels)])
                     print(result, volt)
@@ -909,9 +913,7 @@ elif args.m == 1:
                             break
                         continue
                 else:
-                    commandBenchmark, fileBenchmark = benchmarkCommand(
-                        args.benchmark, folder, 7, levels, "MemoryExploration",
-                        "Frequency")
+                    commandBenchmark, fileBenchmark = benchmarkCommand(args.benchmark, folder, 7, levels, "MemoryExploration", "Frequency")
 
                 if args.experiment == 1:
                     # Remove temp file to guarantee that no trash is in it
@@ -941,8 +943,8 @@ elif args.m == 1:
         if args.v == 1:
             # Undervolt Memory by 10mV
             for editLevel in range(0,4):
-                if int(MemoryVoltage[editLevel]) - 10 >= 810:
-                    MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - 10
+                if int(MemoryVoltage[editLevel]) - args.step >= 810:
+                    MemoryVoltage[editLevel] = int(MemoryVoltage[editLevel]) - args.step
                 else:
                     MemoryVoltage[editLevel] = 800 + editLevel * 2
                     if last[editLevel] == 1:
@@ -950,7 +952,7 @@ elif args.m == 1:
                     last[editLevel] = 1
         else:
             # Overclock Memory by 10Hz
-            MemoryFreq = [int(freq) + 10 for freq in MemoryFreq]
+            MemoryFreq = [int(freq) + args.step for freq in MemoryFreq]
 
         # Apply new Power Table Settings
         for levels in range(0, 4):
