@@ -158,10 +158,9 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
                                          timeout=seconds)
 
                 # Write GPU Temp to end of output file
-                output_file.write("Status: Success .\n")
-                output_file.write("#################################################\n")
-                output_file.write("\n")
+                output_file.write("Status: Success .\n#################################################\n\n")
             print("\tSuccess", filePath)
+
             return True, process.stdout.decode("utf-8") 
         else:
             with open(filePath, "a+") as output_file:
@@ -173,27 +172,22 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
                                          timeout=seconds)
 
                 # Write GPU Temp to end of output file
-                output_file.write("Status: Success .\n")
-                output_file.write("#################################################\n")
-                output_file.write("\n")
+                output_file.write("Status: Success .\n#################################################\n\n")
             print("\tSuccess", filePath)
+
             return True, process.stdout, process.returncode
     except subprocess.CalledProcessError as e:
-        print()
-        print("\tERROR: Execution %s ." % (str(e.returncode)))
-        print()
+        print("\n\tERROR: Execution %s .\n" % (str(e.returncode)))
         with open(filePath, "a+") as output_file:
-            output_file.write("Status: ERROR - Execution %s .\n" % (str(e.returncode)) )
+            output_file.write("Status: ERROR - Execution %s .\n" % (str(e.returncode)))
+            output_file.write("#################################################\n\n")
+
+        return False, None, e.returncode
     except subprocess.TimeoutExpired as t:
-        print()
-        print("\tERROR: Timeout")
-        print()
+        print("\n\tERROR: Timeout\n")
         with open(filePath, "a+") as output_file:
             output_file.write("Status: ERROR - Timeout .\n")
-
-    with open(filePath, "a+") as output_file:
-        output_file.write("#################################################\n")
-        output_file.write("\n")
+            output_file.write("#################################################\n\n")
 
     return False, None, 0
 
@@ -490,6 +484,8 @@ if args.v == 1:
     print("volt", end=" ")
 if args.f == 1:
     print("frequency")
+print(args.benchmark, end=" ")
+print(args.config)
 print()
 
 
@@ -789,7 +785,7 @@ elif args.c == 1:
                     removeFile("output.txt")
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
-                    if returncode == -1:
+                    if returncode != 0:
                         failedInside += 1
                         if failedInside > 5:
                             appendStringToFile("failedInside", fileBenchmark)
@@ -920,7 +916,14 @@ elif args.m == 1:
                     removeFile("output.txt")
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
-                    if returncode == -1:
+                    print("Return code: ", returncode)
+                    # If return code is 255 it means that the DVFS config wasn't correctly applied
+                    if returncode == 255:
+                        failedPerfLevel += 1
+                        if failedPerfLevel > 5:
+                            break
+                        continue
+                    if returncode != 0:
                         failedInside += 1
                         if failedInside > 5:
                             appendStringToFile("failedInside", fileBenchmark)

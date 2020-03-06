@@ -12,7 +12,7 @@ import ast
 # Default DVFS values
 defaultCore = [(852, 800), (991, 900), (1138, 950), (1269, 1000), (1348, 1050),
                (1440, 1100), (1528, 1150), (1601, 1201)]
-defaultMemory = [(167, 800), (500, 900), (800, 950), (946, 1001)]
+defaultMemory = [(167, 800), (500, 900), (800, 950), (950, 1001)]
 
 def countFalse(series):
     series = series.fillna(False)
@@ -113,7 +113,6 @@ del outputNameVars[0]
 
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
-
 # Dictionary holding a pandas dataframe for every benchmark type
 Benchmark = {}
 
@@ -255,7 +254,6 @@ for key, value in Benchmark.items():
         'core frequency', 'core voltage', 'memory performance level',
         'memory frequency', 'memory voltage'
     ], inplace=True)
-
     '''
     # Outliers removal
     # Go through every row of the dataframe and remove all the values that are on the 5% bigger and smaller

@@ -1,7 +1,11 @@
 DRAM: 
 	make -C DRAM/${BENCHMARK}
 
-clean: 
-	make -C DRAM clean
+Core:
+	make -C Core/${BENCHMARK}
 
-.PHONY: DRAM clean
+clean: 
+	make -C DRAM/${BENCHMARK} clean
+	make -C Core/${BENCHMARK} clean
+
+.PHONY: DRAM Core clean
