@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#include "../../../../../lcutil.h"
+#include "lcutil.h"
 
 
 #define COMP_ITERATIONS (4096*4) //512
@@ -18,13 +18,16 @@
 
 #define THREADS (1024)
 #define BLOCKS (32760)
+
+#define MIN_NUMBER 1/100000
+
 #define deviceNum (0)
 
 
 //CODE
 __global__ void warmup(int aux){
 
-	__shared__ double shared[THREADS_WARMUP];
+	__shared__ float shared[THREADS_WARMUP];
 
 	short r0 = 1.0,
 		  r1 = r0+(short)(31),
@@ -100,7 +103,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
+void runbench(double* kernel_time, double* flops, float * hostIn, float * hostOut) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -108,7 +111,7 @@ void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
+    hipLaunchKernelGGL((benchmark<float>), dim3(dimGrid), dim3(dimBlock), 0, 0, (float *) hostIn, (float *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -131,6 +134,11 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
+	// Resets the DVFS Settings
+	int status = system("rocm-smi -r");
+	status = system("./DVFS -P 7");
+	status = system("./DVFS -p 3");
+
 	int pid = fork();
 	if(pid == 0) {
 		char *args[4];
@@ -150,7 +158,7 @@ int main(int argc, char *argv[]){
 
 		// Computes the total sizeB in bits
 		size = (THREADS * BLOCKS) * 4;
-		sizeB = size * (int) sizeof(int);
+		sizeB = size * (int) sizeof(float);
 
 		hipSetDevice(deviceNum);
 
@@ -163,33 +171,35 @@ int main(int argc, char *argv[]){
 		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
 		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-		printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
+		printf("Buffer sizeB: %luMB\n", size*sizeof(float)/(1024*1024));
 		
 		// Initialize Host Memory
-		int *hostIn = (int *) malloc(sizeB);
-		int *hostOut = (int *) calloc(size/4, sizeof(int *));
-		int *defaultOut = (int *) calloc(size/4, sizeof(int *));
+		float *hostIn = (float *) malloc(sizeB);
+		float *hostOut = (float *) calloc(size/4, sizeof(float *));
+		float *defaultOut = (float *) calloc(size/4, sizeof(float *));
 
 		// Generates array of random numbers
 	    srand((unsigned) time(NULL));
-		int random = 0;
+		float random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
+			do {
+				random = (float)rand()/(float)(RAND_MAX);
+			} while(random < MIN_NUMBER);
 			hostIn[i] = random;
 		}
 
 		// Initialize Host Memory
-		int *deviceIn;
-		int *deviceOut;
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(int)));
+		float *deviceIn;
+		float *deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(float)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(float)));
 
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 		
 		// Transfer data from host to device
-		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(float), hipMemcpyHostToDevice));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -211,7 +221,7 @@ int main(int argc, char *argv[]){
 			printf("End Testing\n");
 			printf("Registered time: %f ms\n", n_time[0][0]);
 
-					// Resets the DVFS Settings
+			// Resets the DVFS Settings
 			int status = system("rocm-smi -r");
 			status = system("./DVFS -P 7");
 			status = system("./DVFS -p 3");
@@ -220,11 +230,15 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
+			for (i=0;i<1;i++){
+				runbench_warmup();
+			}
+			// Rerun  the kernel using conventional DVFS settings
 			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
 			printf("Registered time DEFAULT DVFS: %f ms\n", n_time[0][0]);
 
@@ -232,13 +246,10 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
-
-
-			// Compute the Kernel on the CPU
 
 			// Verification of output
 			int failed = 0;
