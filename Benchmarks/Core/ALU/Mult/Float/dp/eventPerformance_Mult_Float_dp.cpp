@@ -11,20 +11,25 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (4096*4) //512
+#define COMP_ITERATIONS (128) //512
 #define REGBLOCK_sizeB (4)
 #define UNROLL_ITERATIONS (32)
 #define THREADS_WARMUP (1024)
 
 #define THREADS (1024)
 #define BLOCKS (32760)
+
+#define MIN_NUMBER 0.999999999999999999
+#define MAX_NUMBER 1.000000000000000001
+#define PRECISION 1/10000
+
 #define deviceNum (0)
 
 
 //CODE
 __global__ void warmup(int aux){
 
-	__shared__ double shared[THREADS_WARMUP];
+	__shared__ float shared[THREADS_WARMUP];
 
 	short r0 = 1.0,
 		  r1 = r0+(short)(31),
@@ -36,9 +41,9 @@ __global__ void warmup(int aux){
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
 			r0 = r0 + r1;//r0;
-			r1 = r1 - r2;//r1;
+			r1 = r1 + r2;//r1;
 			r2 = r2 + r3;//r2;
-			r3 = r3 - r0;//r3;
+			r3 = r3 + r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -49,20 +54,21 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
 	long j;
 
-	register T r0, r1, r2, r3;
+	register T r0, r1, r2, r3, r4;
 
 	r0=cdin[ite];
 	r1=cdin[ite+1];
-	r2=cdin[ite+2];
-	r3=cdin[ite+3];
+	r2=cdin[ite+1];
+	r3=cdin[ite+2];
+	r4=cdin[ite+3];
 
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r0 * r1;//r0;
+			r1 = r1 * r2;//r1;
+			r2 = r2 * r3;//r2;
+			r3 = r3 * r3;//r3;
 		}
 	}
 
@@ -100,7 +106,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, long * hostIn, long * hostOut) {
+void runbench(double* kernel_time, double* flops, double * hostIn, double * hostOut) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -108,7 +114,7 @@ void runbench(double* kernel_time, double* flops, long * hostIn, long * hostOut)
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<long>), dim3(dimGrid), dim3(dimBlock), 0, 0, (long *) hostIn, (long *) hostOut);
+    hipLaunchKernelGGL((benchmark<double>), dim3(dimGrid), dim3(dimBlock), 0, 0, (double *) hostIn, (double *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -155,7 +161,7 @@ int main(int argc, char *argv[]){
 
 		// Computes the total sizeB in bits
 		size = (THREADS * BLOCKS) * 4;
-		sizeB = size * (int) sizeof(long);
+		sizeB = size * (int) sizeof(double);
 
 		hipSetDevice(deviceNum);
 
@@ -168,33 +174,36 @@ int main(int argc, char *argv[]){
 		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
 		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-		printf("Buffer sizeB: %luMB\n", size*sizeof(long)/(1024*1024));
+		printf("Buffer sizeB: %luMB\n", size*sizeof(double)/(1024*1024));
 		
 		// Initialize Host Memory
-		long *hostIn = (long *) malloc(sizeB);
-		long *hostOut = (long *) calloc(size/4, sizeof(long *));
-		long *defaultOut = (long *) calloc(size/4, sizeof(long *));
+		double *hostIn = (double *) malloc(sizeB);
+		double *hostOut = (double *) calloc(size/4, sizeof(double *));
+		double *defaultOut = (double *) calloc(size/4, sizeof(double *));
 
 		// Generates array of random numbers
 	    srand((unsigned) time(NULL));
-		long random = 0;
+		double random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			random = (((long)rand()) << (long) 47) | (((long)rand()) << (long) 32) | ((long)rand() << (long) 17) | (long)rand();
+			do {
+				random = MIN_NUMBER + static_cast <double> (rand()) /( static_cast <double> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
+			} while(random < MIN_NUMBER);
+			//printf("%lf\n", random);
 			hostIn[i] = random;
 		}
 
 		// Initialize Host Memory
-		long *deviceIn;
-		long *deviceOut;
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(long)));
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(long)));
+		double *deviceIn;
+		double *deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(double)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(double)));
 
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 		
 		// Transfer data from host to device
-		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(long), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(double), hipMemcpyHostToDevice));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -225,7 +234,7 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(long), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(double), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -234,22 +243,28 @@ int main(int argc, char *argv[]){
 				runbench_warmup();
 			}
 			// Rerun  the kernel using conventional DVFS settings
-			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
-			printf("Registered time DEFAULT DVFS: %f ms\n", n_time[0][0]);
+			double n_time_default[ntries][2], value_default[ntries][4];
+			runbench(&n_time_default[0][0],&value_default[0][0], deviceIn, deviceOut);
+			printf("Registered time DEFAULT DVFS: %f ms\n", n_time_default[0][0]);
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(long), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(double), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Verification of output
 			int failed = 0;
+			double abss = -2.0f, valueAbs;
 			for (i = 0; i < size/4; i++) {
-				if(defaultOut[i] != hostOut[i]) {
+				printf("%lf %lf\n", defaultOut[i], hostOut[i]);
+				valueAbs = abs(defaultOut[i] - hostOut[i]);
+				if(valueAbs > abss)
+					abss = valueAbs;
+				if(abss > PRECISION) {
 					failed++;
 				}
 			}
@@ -258,6 +273,7 @@ int main(int argc, char *argv[]){
 			else {
 				printf("Result: False .\n");
 				printf("Size: %d Number of failures: %d\n", size/4, failed);
+				printf("ABS %f\n", abss);
 			}
 		}
 		else {

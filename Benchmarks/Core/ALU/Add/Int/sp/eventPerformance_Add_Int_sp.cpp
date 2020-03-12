@@ -35,10 +35,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 * r0 + r1;//r0;
-			r1 = r1 * r1 + r2;//r1;
-			r2 = r2 * r2 + r3;//r2;
-			r3 = r3 * r3 + r0;//r3;
+			r0 = r0 + r1;//r0;
+			r1 = r1 + r2;//r1;
+			r2 = r2 + r3;//r2;
+			r3 = r3 + r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;

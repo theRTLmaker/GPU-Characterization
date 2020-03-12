@@ -39,10 +39,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 * r0 + r1;//r0;
-			r1 = r1 * r1 + r2;//r1;
-			r2 = r2 * r2 + r3;//r2;
-			r3 = r3 * r3 + r0;//r3;
+			r0 = r0 + r1;//r0;
+			r1 = r1 + r2;//r1;
+			r2 = r2 + r3;//r2;
+			r3 = r3 + r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -53,20 +53,21 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
 	long j;
 
-	register T r0, r1, r2, r3;
+	register T r0, r1, r2, r3, r4;
 
 	r0=cdin[ite];
 	r1=cdin[ite+1];
-	r2=cdin[ite+2];
-	r3=cdin[ite+3];
+	r2=cdin[ite+1];
+	r3=cdin[ite+2];
+	r4=cdin[ite+3];
 
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r0 - r2;//r1;
+			r0 = r0 + r3;//r2;
+			r0 = r0 - r3;//r3;
 		}
 	}
 
@@ -255,8 +256,12 @@ int main(int argc, char *argv[]){
 
 			// Verification of output
 			int failed = 0;
+			float abss = -2.0f, valueAbs;
 			for (i = 0; i < size/4; i++) {
-				if(abs(defaultOut[i] - hostOut[i]) > PRECISION) {
+				valueAbs = abs(defaultOut[i] - hostOut[i]);
+				if(valueAbs > abss)
+					abss = valueAbs;
+				if(abss > PRECISION) {
 					failed++;
 				}
 			}
@@ -265,6 +270,7 @@ int main(int argc, char *argv[]){
 			else {
 				printf("Result: False .\n");
 				printf("Size: %d Number of failures: %d\n", size/4, failed);
+				printf("ABS %f\n", abss);
 			}
 		}
 		else {

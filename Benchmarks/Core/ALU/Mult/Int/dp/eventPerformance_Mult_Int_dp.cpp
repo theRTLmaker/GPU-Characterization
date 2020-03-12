@@ -11,7 +11,7 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (4096*4) //512
+#define COMP_ITERATIONS (1024) //512
 #define REGBLOCK_sizeB (4)
 #define UNROLL_ITERATIONS (32)
 #define THREADS_WARMUP (1024)
@@ -19,6 +19,7 @@
 #define THREADS (1024)
 #define BLOCKS (32760)
 #define deviceNum (0)
+#define RANGE (15)
 
 
 //CODE
@@ -35,10 +36,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 + r1;//r0;
-			r1 = r1 - r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 - r0;//r3;
+			r0 = r0 * r1;//r0;
+			r1 = r1 * r2;//r1;
+			r2 = r2 * r3;//r2;
+			r3 = r3 * r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -59,10 +60,10 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r0 * r1;//r0;
+			r1 = r1 * r2;//r1;
+			r2 = r2 * r3;//r2;
+			r3 = r3 * r0;//r3;
 		}
 	}
 
@@ -180,7 +181,9 @@ int main(int argc, char *argv[]){
 		long random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			random = (((long)rand()) << (long) 47) | (((long)rand()) << (long) 32) | ((long)rand() << (long) 17) | (long)rand();
+			random = (unsigned)rand() % RANGE + 1;
+			while(random % 2 == 0)
+				random = (unsigned)rand() % RANGE + 1;
 			hostIn[i] = random;
 		}
 
@@ -249,6 +252,7 @@ int main(int argc, char *argv[]){
 			// Verification of output
 			int failed = 0;
 			for (i = 0; i < size/4; i++) {
+				//printf("%ld == %ld\n", defaultOut[i], hostOut[i]);
 				if(defaultOut[i] != hostOut[i]) {
 					failed++;
 				}
