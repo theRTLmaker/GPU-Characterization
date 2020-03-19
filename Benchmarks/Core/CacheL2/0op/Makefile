@@ -1,13 +1,13 @@
 #
 # Copyright 2011-2015 NVIDIA Corporation. All rights reserved
 #
-INCLUDES=
+INCLUDES=/homelocal/fmendeslocal/GPU-Characterization
 
 CC = hipcc
 
 OBJ = o
 
-NAME = eventPerformance_Int_Mult
+NAME = eventCacheL2_0op
 
 # export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64:$LD_LIBRARY_PATH
 LIBS=
@@ -23,7 +23,7 @@ $(NAME): $(NAME).$(OBJ)
 	$(CC) -o $@ $(NAME).$(OBJ) $(LIBS)
 
 $(NAME).$(OBJ): $(NAME).cpp
-	$(CC) -c $(INCLUDES) $<
+	$(CC) -c -I$(INCLUDES) $<
 
 clean:
 	rm -f $(NAME) $(NAME).$(OBJ)

@@ -11,35 +11,27 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (4096*4) //512
-#define REGBLOCK_sizeB (4)
+#define COMP_ITERATIONS (4096) //512
+#define THREADS (1024)
+#define BLOCKS (32760)
+#define N (10)
 
 #define UNROLL_ITERATIONS (32)
 #define THREADS_WARMUP (1024)
-
-#define THREADS (1024)
-#define BLOCKS (32760)
-
-#define MIN_NUMBER 0.000001
-#define MAX_NUMBER 0.00001
-#define PRECISION 1/10000
-
-#define COMP_ITERATIONS_WARMUP (128) //512
-
 #define deviceNum (0)
 
 
 //CODE
 __global__ void warmup(int aux){
 
-	__shared__ float shared[THREADS_WARMUP];
+	__shared__ double shared[THREADS_WARMUP];
 
 	short r0 = 1.0,
 		  r1 = r0+(short)(31),
 		  r2 = r0+(short)(37),
 		  r3 = r0+(short)(41);
 
-	for(int j=0; j<COMP_ITERATIONS_WARMUP; j+=UNROLL_ITERATIONS){
+	for(int j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
@@ -54,30 +46,27 @@ __global__ void warmup(int aux){
 
 template <class T> __global__ void benchmark(T* cdin, T* cdout){
 
-	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
-	long j;
+	const long ite = blockIdx.x * THREADS + threadIdx.x;
 
-	register T r0, r1, r2, r3, r4;
+	T r0;
+	register T r1, r2, r3, r4, r5; 
 
-	r0=cdin[ite];
-	r1=cdin[ite+1];
-	r2=cdin[ite+1];
-	r3=cdin[ite+2];
-	r4=cdin[ite+3];
-
-	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
-		#pragma unroll
-		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r0 * r1;//r0;
-			r1 = r1 + r1 * r2;//r1;
-			r2 = r2 + r2 * r3;//r2;
-			r3 = r3 + r3 * r3;//r3;
+	for (int k=0; k<N;k++){
+		for(int j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
+			#pragma unroll
+			for(int i=0; i<UNROLL_ITERATIONS; i++){
+				r0 = cdin[ite];
+				r1 = r0;
+				r2 += r3;
+				r4 += r5;
+				r3 += r4;
+				r5 += r1;
+				cdout[ite]=r0;
+			}
 		}
 	}
-
-	cdout[ite/4]=r0;
+	cdout[ite]=r0;
 }
-
 
 void initializeEvents(hipEvent_t *start, hipEvent_t *stop){
 	HIP_SAFE_CALL( hipEventCreate(start) );
@@ -109,7 +98,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, float * hostIn, float * hostOut) {
+void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -117,7 +106,7 @@ void runbench(double* kernel_time, double* flops, float * hostIn, float * hostOu
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<float>), dim3(dimGrid), dim3(dimBlock), 0, 0, (float *) hostIn, (float *) hostOut);
+    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -131,26 +120,35 @@ int main(int argc, char *argv[]){
 	int i;
 	int device = 0;
 
+	// Resets the DVFS Settings to guarantee correct MemCpy of the data
+	int status = system("rocm-smi -r");
+	status = system("./DVFS -P 7");
+	status = system("./DVFS -p 3");
+
+
+	HIP_SAFE_CALL( hipDeviceReset());
+	// Synchronize in order to wait for memory operations to finish
+	HIP_SAFE_CALL(hipDeviceSynchronize());
+
 	hipDeviceProp_t deviceProp;
 
 	int ntries = 1;
 	unsigned int sizeB, size; 
-	if (argc > 1) {
-		printf("Usage: %s \n", argv[0]);
+	if(argc > 1) {
+		printf("Usage: %s [ntries]\n", argv[0]);
 		exit(1);
 	}
 
-	// Resets the DVFS Settings
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
+	// Computes the total sizeB in bits
+	size = THREADS*BLOCKS;
+	sizeB *= sizeof(int);
 
 	int pid = fork();
 	if(pid == 0) {
 		char *args[4];
 		std::string gpowerSAMPLER = "gpowerSAMPLER_peak";
 		std::string e = "-e";
-		std::string time_string = "-s 1";
+		std::string time_string = "-s 10";
 		args[0] = (char *) gpowerSAMPLER.c_str();
 		args[1] = (char *) e.c_str();
 		args[2] = (char *) time_string.c_str();
@@ -161,11 +159,6 @@ int main(int argc, char *argv[]){
 		exit(0);
 	}
 	else {
-
-		// Computes the total sizeB in bits
-		size = (THREADS * BLOCKS) * 4;
-		sizeB = size * (int) sizeof(float);
-
 		hipSetDevice(deviceNum);
 
 		double n_time[ntries][2], value[ntries][4];
@@ -174,53 +167,51 @@ int main(int argc, char *argv[]){
 		size_t freeCUDAMem, totalCUDAMem;
 		HIP_SAFE_CALL(hipMemGetInfo(&freeCUDAMem, &totalCUDAMem));
 
-		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
 		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-		printf("Buffer sizeB: %luMB\n", size*sizeof(float)/(1024*1024));
-		
+		printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
 		// Initialize Host Memory
-		float *hostIn = (float *) malloc(sizeB);
-		float *hostOut = (float *) calloc(size/4, sizeof(float *));
-		float *defaultOut = (float *) calloc(size/4, sizeof(float *));
+		int *hostIn = (int *) malloc(size*sizeof(int));
+		int *hostOut = (int *) malloc(size*sizeof(int));
 
 		// Generates array of random numbers
 	    srand((unsigned) time(NULL));
-		float random = 0;
+	    int sum = 0;
+		int random = 0;
 		// Initialize the input data
-		for (i = 0; i < size; i++) {
-			do {
-				random = MIN_NUMBER + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
-			} while(random < MIN_NUMBER);
-			//printf("%lf\n", random);
+		for (i = 0; i < size-1; i++) {
+			random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
 			hostIn[i] = random;
+			sum += random;
 		}
+		
+		// Places the sum on the last vector position
+		hostIn[i] = sum;
 
-		// Initialize Host Memory
-		float *deviceIn;
-		float *deviceOut;
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(float)));
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(float)));
 
+		// Initialize Device Memory
+		int *deviceIn, *deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, size * sizeof(int)));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 		
 		// Transfer data from host to device
-		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(float), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
-		for (i=0;i<1;i++){
-			runbench_warmup();
-		}
+		// Run the warmup kernel to flush caches
+		runbench_warmup();
+		
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
+		// Apply custom DVFS profile
 		int status = system("python applyDVFS.py 7 3");
 		printf("Apply DVFS status: %d\n", status);
 
 		if(status == 0) {
-
 			printf("Start Testing\n");
 			kill(pid, SIGUSR1);
 			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
@@ -233,61 +224,36 @@ int main(int argc, char *argv[]){
 			status = system("./DVFS -P 7");
 			status = system("./DVFS -p 3");
 
-		
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size*sizeof(int), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
-			for (i=0;i<1;i++){
-				runbench_warmup();
+
+			// Verification of data transfer
+			int sum_received = 0;
+			for (i = 0; i < size-1; i++) {
+				sum_received += hostOut[i];
 			}
-			// Rerun  the kernel using conventional DVFS settings
-			double n_time_default[ntries][2], value_default[ntries][4];
-			runbench(&n_time_default[0][0],&value_default[0][0], deviceIn, deviceOut);
-			printf("Registered time DEFAULT DVFS: %f ms\n", n_time_default[0][0]);
-
-			// Synchronize in order to wait for memory operations to finish
-			HIP_SAFE_CALL(hipDeviceSynchronize());
-
-			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
-
-			// Synchronize in order to wait for memory operations to finish
-			HIP_SAFE_CALL(hipDeviceSynchronize());
-
-			// Verification of output
-			int failed = 0;
-			float abss = -2.0f, valueAbs;
-			for (i = 0; i < size/4; i++) {
-				//printf("%lf %lf\n", defaultOut[i], hostOut[i]);
-				valueAbs = abs(defaultOut[i] - hostOut[i]);
-				if(valueAbs > abss)
-					abss = valueAbs;
-				if(abss > PRECISION) {
-					failed++;
-				}
-			}
-			if(failed == 0) 
+			if(sum == sum_received && sum == hostOut[size-1]) 
 				printf("Result: True .\n");
 			else {
 				printf("Result: False .\n");
-				printf("Size: %d Number of failures: %d\n", size/4, failed);
-				printf("ABS %f\n", abss);
+				printf("sum: %d != sum_received: %d\n", sum, sum_received);
 			}
 		}
 		else {
+			// Kills gpowerSAMPLER child process
 			kill(pid, SIGKILL);
 
 			HIP_SAFE_CALL( hipDeviceReset());
-
 		    free(hostIn);
 		    free(hostOut);
 
-		    // Wait for child process t finish
+		    // Wait for child process to finish
 		    pid = wait(&status);
 
 		    return -1;
@@ -297,6 +263,7 @@ int main(int argc, char *argv[]){
 		free(hostIn);
 		free(hostOut);
 
+		// Wait for child process to finish
 		pid = wait(&status);
 	}
 	return 0;

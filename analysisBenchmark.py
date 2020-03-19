@@ -181,7 +181,6 @@ for f in files:
             Benchmark[int(benchmarkType)] = []
         Benchmark[int(benchmarkType)].append(params)
     except:
-        continue
         if benchmarkType not in Benchmark:
             Benchmark[benchmarkType] = []
         Benchmark[benchmarkType].append(params)

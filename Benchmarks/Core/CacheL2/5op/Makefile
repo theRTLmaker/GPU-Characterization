@@ -7,7 +7,7 @@ CC = hipcc
 
 OBJ = o
 
-NAME = eventPerformance_Add_Float_hp
+NAME = eventCacheL2_5op
 
 # export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64:$LD_LIBRARY_PATH
 LIBS=

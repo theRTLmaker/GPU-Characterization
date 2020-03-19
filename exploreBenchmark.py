@@ -757,7 +757,7 @@ elif args.c == 1:
                 if cur != (int(levels), 3):
                     print(" Selected Performance Levels don't match current ones. %s != (%d, 3)" % (cur, int(levels)))
                     failedPerfLevel += 1
-                    if failedPerfLevel > 5:
+                    if failedPerfLevel > 2:
                         appendStringToFile("failedPerfLevel", fileBenchmark)
                         break
                     continue
@@ -770,9 +770,9 @@ elif args.c == 1:
                     result, volt = currentVoltageIsRespected(CoreVoltage[int(levels)], MemoryVoltage[3])
                     print(result, volt)
                     if result == False:
-                        print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[int(levelsCore)]), int(MemoryVoltage[3])))
+                        print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[int(levels)]), int(MemoryVoltage[3])))
                         failedVoltage += 1
-                        if failedVoltage > 5:
+                        if failedVoltage > 2:
                             appendStringToFile("failedVoltage", fileBenchmark)
                             break
                         continue
@@ -785,19 +785,24 @@ elif args.c == 1:
                     removeFile("output.txt")
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, "output.txt", i)
-                    if returncode != 0:
-                        failedInside += 1
-                        if failedInside > 5:
-                            appendStringToFile("failedInside", fileBenchmark)
+                    print("Return code: ", returncode)
+                    if returncode == 255:
+                        failedPerfLevel += 1
+                        if failedPerfLevel > 2:
                             break
                         continue
                     appendFileToFile(fileBenchmark, "output.txt")
+                    if returncode != 0:
+                        failedInside += 1
+                        if failedInside > 0:
+                            appendStringToFile("failedInside", fileBenchmark)
+                            break
                 else:
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
 
                 if result == False:
                     failedExec += 1
-                    if failedExec > 5:
+                    if failedExec > 0:
                         working[levels] = 0
                         appendStringToFile("failedExec", fileBenchmark)
                         break;
@@ -816,6 +821,8 @@ elif args.c == 1:
                     if last[editLevel] == 1:
                         working[editLevel] = 0
                     last[editLevel] = 1
+            if int(CoreVoltage[7]) < 900:
+                exit()
         else:
             # Overclock all levels Core by 10Hz
             CoreFreq = [int(volt) + args.step for volt in CoreFreq]
@@ -923,13 +930,12 @@ elif args.m == 1:
                         if failedPerfLevel > 5:
                             break
                         continue
+                    appendFileToFile(fileBenchmark, "output.txt")
                     if returncode != 0:
                         failedInside += 1
                         if failedInside > 5:
                             appendStringToFile("failedInside", fileBenchmark)
                             break
-                        continue
-                    appendFileToFile(fileBenchmark, "output.txt")
                 else:
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
