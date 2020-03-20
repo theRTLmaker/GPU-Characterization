@@ -11,9 +11,9 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (4096) //512
+#define COMP_ITERATIONS (2048) //512
 #define REGBLOCK_sizeB (4)
-#define UNROLL_ITERATIONS (32)
+#define UNROLL_ITERATIONS (32)//32
 #define THREADS_WARMUP (1024)
 
 #define THREADS (1024)
@@ -21,9 +21,13 @@
 #define deviceNum (0)
 #define RANGE (15)
 
+#define MIN_NUMBER 0.000001
+#define MAX_NUMBER 1.5
+#define PRECISION 1/10000
+
 
 //CODE
-__global__ void warmup(int aux){
+__global__ void warmup(int aux){ 
 
 	__shared__ double shared[THREADS_WARMUP];
 
@@ -36,10 +40,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 * r1;//r0;
-			r1 = r1 * r2;//r1;
-			r2 = r2 * r3;//r2;
-			r3 = r3 * r0;//r3;
+			r0 = r0 + r1;//r0;
+			r1 = r1 + r2;//r1;
+			r2 = r2 + r3;//r2;
+			r3 = r3 + r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -60,10 +64,10 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 * r1;//r0;
-			r1 = r1 * r2;//r1;
-			r2 = r2 * r3;//r2;
-			r3 = r3 * r0;//r3;
+			r0 = exp(r2);
+            r1 = cos(r3);
+            r2 = log(r0);
+            r3 = sin(r1);
 		}
 	}
 
@@ -101,7 +105,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
+void runbench(double* kernel_time, double* flops, float * hostIn, float * hostOut) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -109,7 +113,7 @@ void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
+    hipLaunchKernelGGL((benchmark<float>), dim3(dimGrid), dim3(dimBlock), 0, 0, (float *) hostIn, (float *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -156,7 +160,7 @@ int main(int argc, char *argv[]){
 
 		// Computes the total sizeB in bits
 		size = (THREADS * BLOCKS) * 4;
-		sizeB = size * (int) sizeof(int);
+		sizeB = size * (int) sizeof(float);
 
 		hipSetDevice(deviceNum);
 
@@ -169,41 +173,41 @@ int main(int argc, char *argv[]){
 		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
 		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-		printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
+		printf("Buffer sizeB: %luMB\n", size*sizeof(float)/(1024*1024));
 		
 		// Initialize Host Memory
-		int *hostIn = (int *) malloc(sizeB);
-		int *hostOut = (int *) calloc(size/4, sizeof(int *));
-		int *defaultOut = (int *) calloc(size/4, sizeof(int *));
+		float *hostIn = (float *) malloc(sizeB);
+		float *hostOut = (float *) calloc(size/4, sizeof(float *));
+		float *defaultOut = (float *) calloc(size/4, sizeof(float *));
 
 		// Generates array of random numbers
 	    srand((unsigned) time(NULL));
-		int random = 0;
+		float random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			random = (unsigned)rand() % RANGE + 1;
-			while(random % 2 == 0)
-				random = (unsigned)rand() % RANGE + 1;
+			random = MIN_NUMBER + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
 			hostIn[i] = random;
 		}
 
 		// Initialize Host Memory
-		int *deviceIn;
-		int *deviceOut;
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(int)));
+		float *deviceIn;
+		float *deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(float)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(float)));
 
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 		
 		// Transfer data from host to device
-		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(float), hipMemcpyHostToDevice));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
+		printf("Start warmup\n");
 		for (i=0;i<1;i++){
 			runbench_warmup();
 		}
+		printf("End warmup\n");
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -228,7 +232,7 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -244,7 +248,7 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(float), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -252,8 +256,8 @@ int main(int argc, char *argv[]){
 			// Verification of output
 			int failed = 0;
 			for (i = 0; i < size/4; i++) {
-				//printf("%d == %d\n", defaultOut[i], hostOut[i]);
-				if(defaultOut[i] != hostOut[i]) {
+				//printf("%f - %f = %f\n", defaultOut[i], hostOut[i], abs(defaultOut[i] - hostOut[i]));
+				if(abs(defaultOut[i] - hostOut[i]) > PRECISION) {
 					failed++;
 				}
 			}

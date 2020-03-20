@@ -14,4 +14,4 @@
 *.o
 
 # Outputs of the benchmarks
-**/Results
+**/Results*

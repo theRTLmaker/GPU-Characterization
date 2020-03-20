@@ -11,25 +11,25 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (128) //512
+#define COMP_ITERATIONS (32) //512
 #define REGBLOCK_sizeB (4)
-#define UNROLL_ITERATIONS (32)
+#define UNROLL_ITERATIONS (32)//32
 #define THREADS_WARMUP (1024)
 
 #define THREADS (1024)
 #define BLOCKS (32760)
-
-#define MIN_NUMBER 0.999999999999999999
-#define MAX_NUMBER 1.000000000000000001
-#define PRECISION 1/10000
-
 #define deviceNum (0)
+#define RANGE (15)
+
+#define MIN_NUMBER 0.000001
+#define MAX_NUMBER 1.5
+#define PRECISION 1/10000
 
 
 //CODE
-__global__ void warmup(int aux){
+__global__ void warmup(int aux){ 
 
-	__shared__ float shared[THREADS_WARMUP];
+	__shared__ double shared[THREADS_WARMUP];
 
 	short r0 = 1.0,
 		  r1 = r0+(short)(31),
@@ -54,21 +54,20 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
 	long j;
 
-	register T r0, r1, r2, r3, r4;
+	register T r0, r1, r2, r3;
 
 	r0=cdin[ite];
 	r1=cdin[ite+1];
-	r2=cdin[ite+1];
-	r3=cdin[ite+2];
-	r4=cdin[ite+3];
+	r2=cdin[ite+2];
+	r3=cdin[ite+3];
 
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 * r1;//r0;
-			r1 = r1 * r2;//r1;
-			r2 = r2 * r3;//r2;
-			r3 = r3 * r3;//r3;
+			r0 = exp(r2);
+            r1 = cos(r3);
+            r2 = log(r0);
+            r3 = sin(r1);
 		}
 	}
 
@@ -186,10 +185,7 @@ int main(int argc, char *argv[]){
 		double random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			do {
-				random = MIN_NUMBER + static_cast <double> (rand()) /( static_cast <double> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
-			} while(random < MIN_NUMBER);
-			//printf("%lf\n", random);
+			random = MIN_NUMBER + static_cast <double> (rand()) /( static_cast <double> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
 			hostIn[i] = random;
 		}
 
@@ -207,9 +203,11 @@ int main(int argc, char *argv[]){
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
+		printf("Start warmup\n");
 		for (i=0;i<1;i++){
 			runbench_warmup();
 		}
+		printf("End warmup\n");
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -243,9 +241,8 @@ int main(int argc, char *argv[]){
 				runbench_warmup();
 			}
 			// Rerun  the kernel using conventional DVFS settings
-			double n_time_default[ntries][2], value_default[ntries][4];
-			runbench(&n_time_default[0][0],&value_default[0][0], deviceIn, deviceOut);
-			printf("Registered time DEFAULT DVFS: %f ms\n", n_time_default[0][0]);
+			runbench(&n_time[0][0],&value[0][0], deviceIn, deviceOut);
+			printf("Registered time DEFAULT DVFS: %f ms\n", n_time[0][0]);
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -258,13 +255,9 @@ int main(int argc, char *argv[]){
 
 			// Verification of output
 			int failed = 0;
-			double abss = -2.0f, valueAbs;
 			for (i = 0; i < size/4; i++) {
-				printf("%lf %lf\n", defaultOut[i], hostOut[i]);
-				valueAbs = abs(defaultOut[i] - hostOut[i]);
-				if(valueAbs > abss)
-					abss = valueAbs;
-				if(abss > PRECISION) {
+				//printf("%f - %f = %f\n", defaultOut[i], hostOut[i], abs(defaultOut[i] - hostOut[i]));
+				if(abs(defaultOut[i] - hostOut[i]) > PRECISION) {
 					failed++;
 				}
 			}
@@ -273,7 +266,6 @@ int main(int argc, char *argv[]){
 			else {
 				printf("Result: False .\n");
 				printf("Size: %d Number of failures: %d\n", size/4, failed);
-				printf("ABS %f\n", abss);
 			}
 		}
 		else {
