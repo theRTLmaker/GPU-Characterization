@@ -1,7 +1,0 @@
-FILE=
-eventperformance_MemCpy_{size}
-
-OUTPUT=
-MemCpyTime {MemCpy Time (average, min, max (Time [ms]))} ms
-Result: {Result}
-Temperature: {Temperature} c
