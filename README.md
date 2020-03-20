@@ -1,9 +1,5 @@
 # Non-Conventional AMD GPU Characterization Tool and Methodology
 
-[![NPM Version][npm-image]][npm-url]
-[![Build Status][travis-image]][travis-url]
-[![Downloads Stats][npm-downloads]][npm-url]
-
 Set of benchmarks ana analysis tools to characterize the response of AMD GPU architecture to different workloads whily using non-conventional (extreme undervoltage) DVFS settings
 
 
@@ -39,27 +35,27 @@ sudo yum install miopengemm
 
 ## Running the tests
 
-Explain how to run the automated tests for this system
+Use the exploreBenchmark Python script to run a Benchmark on different GPU DVFS configurations
 
-### Break down into end to end tests
-
-Explain what these tests test and why
-
+### General example for running benchmark
 ```
-Give an example
+python exploreBenchmark.py -b <location of executable file> -e -c -v -t 10 -lc 7 --step 25 --reset --config <configuration file>
 ```
 
-### And coding style tests
-
-Explain what these tests test and why
-
+### Example for running SFU benchmark
 ```
-Give an example
+python exploreBenchmark.py -b Benchmarks/Core/ALU/SFU/Float/sp/eventPerformance_SFU_Float_sp -e -c -v -t 10 -lc 7 --step 25 --reset --config configExploreFiles/11.txt
 ```
 
-## Deployment
+## Runing analysis tool
+```
+python analysisBenchmark.py -p <location of results files> -c <config file>
+```
 
-Add additional notes about how to deploy this on a live system
+
+<!-- ## Deployment
+
+Add additional notes about how to deploy this on a live system -->
 
 ## Built With
 
@@ -78,7 +74,6 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 ## Authors
 
 * **Francisco Mendes** - [TheEmbbededCoder](https://github.com/TheEmbbededCoder/)
-
 * **IST - INESC-ID** - [INESC-ID](https://inesc-id.pt/)
 
 
