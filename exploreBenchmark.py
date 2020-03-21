@@ -868,6 +868,7 @@ elif args.m == 1:
                     time.sleep(2)
                     curTemp = getCurrentTemp()
                     print("Current Temperature: ", curTemp)
+
                 # Places PowerPlay Table to current values
                 if args.reset == 1:
                     if preDVFSconfig() == False:
@@ -897,7 +898,7 @@ elif args.m == 1:
                 if cur != (7, int(levels)):
                     print(" Selected Performance Levels don't match current ones. %s != (7, %d)" % (cur, int(levels)))
                     failedPerfLevel += 1
-                    if failedPerfLevel > 5:
+                    if failedPerfLevel > 2:
                         appendStringToFile("failedPerfLevel", fileBenchmark)
                         break
                     continue
@@ -911,7 +912,7 @@ elif args.m == 1:
                     if result == False:
                         print("Current voltage is %d != Core: %d | Memory: %d" % (int(volt), int(CoreVoltage[7]), int(MemoryVoltage[int(levels)])))
                         failedVoltage += 1
-                        if failedVoltage > 5:                            
+                        if failedVoltage > 2:                            
                             appendStringToFile("failedVoltage", fileBenchmark)
                             break
                         continue
@@ -927,24 +928,26 @@ elif args.m == 1:
                     # If return code is 255 it means that the DVFS config wasn't correctly applied
                     if returncode == 255:
                         failedPerfLevel += 1
-                        if failedPerfLevel > 5:
+                        if failedPerfLevel > 2:
                             break
                         continue
                     appendFileToFile(fileBenchmark, "output.txt")
                     if returncode != 0:
                         failedInside += 1
-                        if failedInside > 5:
+                        if failedInside > 2:
                             appendStringToFile("failedInside", fileBenchmark)
                             break
                 else:
                     # Run the benchmark
                     result, output, returncode = runBashCommandOutputToFile(commandBenchmark, fileBenchmark, i)
+                
                 if result == False:
                     failedExec += 1
-                    if failedExec > 5:
+                    if failedExec > 2:
                         working[levels] = 0
                         appendStringToFile("failedExec", fileBenchmark)
                         break;
+                        
                 i += 1
                 failedPerfLevel = 0
                 failedVoltage = 0

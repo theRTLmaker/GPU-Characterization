@@ -124,8 +124,11 @@ for f in files:
     # Get the benchmark type
     regex = re.compile(fileConvention[:-1] + "-")
     benchmarkType = []
-    if regex.match(f).groups():
-        for i in regex.match(f).groups():
+    filename = regex.match(f)
+    if filename == None:
+        continue
+    if filename.groups():
+        for i in filename.groups():
             benchmarkType.append(i)
         benchmarkType = "-".join(benchmarkType)
     else:
