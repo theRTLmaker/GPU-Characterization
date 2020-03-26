@@ -10,8 +10,9 @@
 
 #include "lcutil.h"
 
+//#define TEST_RUN
 
-#define COMP_ITERATIONS (512) //512
+#define COMP_ITERATIONS (4096) //512
 #define REGBLOCK_sizeB (4)
 
 #define UNROLL_ITERATIONS (32)
@@ -20,9 +21,7 @@
 #define THREADS (1024)
 #define BLOCKS (32760)
 
-#define MIN_NUMBER 0.0001
-#define MAX_NUMBER 0.001
-#define PRECISION 1/10000
+#define COMP_ITERATIONS_WARMUP (512) //512
 
 #define deviceNum (0)
 
@@ -37,7 +36,7 @@ __global__ void warmup(int aux){
 		  r2 = r0+(short)(37),
 		  r3 = r0+(short)(41);
 
-	for(int j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
+	for(int j=0; j<COMP_ITERATIONS_WARMUP; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
@@ -110,7 +109,7 @@ void runbench_warmup(){
 	HIP_SAFE_CALL( hipDeviceSynchronize() );
 }
 
-void runbench(double* kernel_time, double* flops, double * hostIn, double * hostOut) {
+void runbench(double* kernel_time, double* flops, int * hostIn, int * hostOut) {
 
 	hipEvent_t start, stop;
 	dim3 dimBlock(THREADS, 1, 1);
@@ -118,7 +117,7 @@ void runbench(double* kernel_time, double* flops, double * hostIn, double * host
 
 	initializeEvents(&start, &stop);
 
-    hipLaunchKernelGGL((benchmark<double>), dim3(dimGrid), dim3(dimBlock), 0, 0, (double *) hostIn, (double *) hostOut);
+    hipLaunchKernelGGL((benchmark<int>), dim3(dimGrid), dim3(dimBlock), 0, 0, (int *) hostIn, (int *) hostOut);
 
 	hipDeviceSynchronize();
 
@@ -131,6 +130,7 @@ int main(int argc, char *argv[]){
 
 	int i;
 	int device = 0;
+	int status;
 
 	hipDeviceProp_t deviceProp;
 
@@ -141,10 +141,13 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-	// Resets the DVFS Settings
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
+	#ifdef TEST_RUN
+		printf("TEST_RUN\n");
+		// Resets the DVFS Settings
+		status = system("rocm-smi -r");
+		status = system("./DVFS -P 7");
+		status = system("./DVFS -p 3");
+	#endif
 
 	int pid = fork();
 	if(pid == 0) {
@@ -165,7 +168,7 @@ int main(int argc, char *argv[]){
 
 		// Computes the total sizeB in bits
 		size = (THREADS * BLOCKS) * 4;
-		sizeB = size * (int) sizeof(double);
+		sizeB = size * (int) sizeof(int);
 
 		hipSetDevice(deviceNum);
 
@@ -178,36 +181,34 @@ int main(int argc, char *argv[]){
 		HIP_SAFE_CALL(hipGetDeviceProperties(&deviceProp, device));
 
 		printf("Total GPU memory %lu, free %lu\n", totalCUDAMem, freeCUDAMem);
-		printf("Buffer sizeB: %luMB\n", size*sizeof(double)/(1024*1024));
+		printf("Buffer sizeB: %luMB\n", size*sizeof(int)/(1024*1024));
 		
 		// Initialize Host Memory
-		double *hostIn = (double *) malloc(sizeB);
-		double *hostOut = (double *) calloc(size/4, sizeof(double *));
-		double *defaultOut = (double *) calloc(size/4, sizeof(double *));
+		int *hostIn = (int *) malloc(sizeB);
+		int *hostOut = (int *) calloc(size/4, sizeof(int *));
+		int *defaultOut = (int *) calloc(size/4, sizeof(int *));
 
 		// Generates array of random numbers
 	    srand((unsigned) time(NULL));
-		double random = 0;
+		int random = 0;
 		// Initialize the input data
 		for (i = 0; i < size; i++) {
-			do {
-				random = MIN_NUMBER + static_cast <double> (rand()) /( static_cast <double> (RAND_MAX/(MAX_NUMBER-MIN_NUMBER)));
-			} while(random < MIN_NUMBER);
-			//printf("%lf\n", random);
+			random = ((unsigned)rand() << 17) | ((unsigned)rand() << 2) | ((unsigned)rand() & 3);
+			//printf("%d\n", random);
 			hostIn[i] = random;
 		}
 
 		// Initialize Host Memory
-		double *deviceIn;
-		double *deviceOut;
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(double)));
-		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(double)));
+		int *deviceIn;
+		int *deviceOut;
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceIn, size * sizeof(int)));
+		HIP_SAFE_CALL(hipMalloc((void**)&deviceOut, (size/4) * sizeof(int)));
 
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 		
 		// Transfer data from host to device
-		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(double), hipMemcpyHostToDevice));
+		HIP_SAFE_CALL(hipMemcpy(deviceIn, hostIn, size*sizeof(int), hipMemcpyHostToDevice));
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
@@ -217,8 +218,10 @@ int main(int argc, char *argv[]){
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
-		int status = system("python applyDVFS.py 7 3");
-		printf("Apply DVFS status: %d\n", status);
+		#ifdef TEST_RUN
+			status = system("python applyDVFS.py 7 3");
+			printf("Apply DVFS status: %d\n", status);
+		#endif
 
 		if(status == 0) {
 
@@ -231,14 +234,16 @@ int main(int argc, char *argv[]){
 
 			// Resets the DVFS Settings
 			int status = system("rocm-smi -r");
-			status = system("./DVFS -P 7");
-			status = system("./DVFS -p 3");
+			#ifdef TEST_RUN
+				status = system("./DVFS -P 7");
+				status = system("./DVFS -p 3");
+			#endif
 
 		
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(double), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(hostOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -255,20 +260,16 @@ int main(int argc, char *argv[]){
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host
-			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(double), hipMemcpyDeviceToHost));
+			HIP_SAFE_CALL(hipMemcpy(defaultOut, deviceOut,  size/4*sizeof(int), hipMemcpyDeviceToHost));
 
 			// Synchronize in order to wait for memory operations to finish
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Verification of output
 			int failed = 0;
-			double abss = -2.0f, valueAbs;
 			for (i = 0; i < size/4; i++) {
-				//printf("%lf %lf\n", defaultOut[i], hostOut[i]);
-				valueAbs = abs(defaultOut[i] - hostOut[i]);
-				if(valueAbs > abss)
-					abss = valueAbs;
-				if(abss > PRECISION) {
+				//printf("%d %d\n", defaultOut[i], hostOut[i]);
+				if(defaultOut[i] != hostOut[i]) {
 					failed++;
 				}
 			}
@@ -277,7 +278,6 @@ int main(int argc, char *argv[]){
 			else {
 				printf("Result: False .\n");
 				printf("Size: %d Number of failures: %d\n", size/4, failed);
-				printf("ABS %f\n", abss);
 			}
 		}
 		else {

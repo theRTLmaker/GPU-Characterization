@@ -7,7 +7,7 @@ CC = hipcc
 
 OBJ = o
 
-NAME = eventPerformance_Add_Mult_Float_dp_default
+NAME = eventPerformance_Add_Mult_Float_hp_default
 
 # export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64:$LD_LIBRARY_PATH
 LIBS=

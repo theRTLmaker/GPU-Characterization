@@ -24,7 +24,7 @@
 #define MAX_NUMBER 0.00001
 #define PRECISION 1/10000
 
-#define COMP_ITERATIONS_WARMUP (128) //512
+#define COMP_ITERATIONS_WARMUP (512) //512
 
 #define deviceNum (0)
 
@@ -43,10 +43,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r1;//r0;
-			r1 = r2;//r1;
-			r2 = r3;//r2;
-			r3 = r0;//r3;
+			r0 = r0 + r1;//r0;
+			r1 = r1 + r2;//r1;
+			r2 = r2 + r3;//r2;
+			r3 = r3 + r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -57,21 +57,24 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
 	long j;
 
-	register T r0, r1, r2, r3, r4;
+	register T r0, r1, r2, r3, r4, r5;
 
 	r0=cdin[ite];
 	r1=cdin[ite+1];
 	r2=cdin[ite+1];
 	r3=cdin[ite+2];
-	r4=cdin[ite+3];
+	r4 = r0;
+	r5 = r1;
 
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r0 * r1;//r0;
-			r1 = r1 + r1 * r2;//r1;
-			r2 = r2 + r2 * r3;//r2;
-			r3 = r3 + r3 * r3;//r3;
+			r0 = r0 + r0 * r1;//r0;r5;r4;r3;r2;r1;
+			r1 = r1 + r1 * r2;//r1;r0;r5;r4;r3;r2;
+			r2 = r2 + r2 * r3;//r2;r1;r0;r5;r4;r3;
+			r3 = r3 + r3 * r4;//r3;r2;r1;r0;r5;r4;
+			r4 = r4 + r4 * r5;//r4;r3;r2;r1;r0;r5;
+			r5 = r5 + r5 * r0;//r5;r4;r3;r2;r1;r0;
 		}
 	}
 

@@ -10,6 +10,8 @@
 
 #include "../../../lcutil.h"
 
+//#define TEST_RUN
+
 
 #define COMP_ITERATIONS (4096) //512
 #define REGBLOCK_sizeB (4)
@@ -114,11 +116,15 @@ void runbench(double* kernel_time, double* flops, int * hostIn0, int * hostIn1, 
 int main(int argc, char *argv[]){
 	int i;
 	int device = 0;
+	int status;
 
-	// Resets the DVFS Settings to guarantee correct MemCpy of the data
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
+	#ifdef TEST_RUN
+		printf("TEST_RUN\n");
+		// Resets the DVFS Settings to guarantee correct MemCpy of the data
+		status = system("rocm-smi -r");
+		status = system("./DVFS -P 7");
+		status = system("./DVFS -p 3");
+	#endif
 
 	// Synchronize in order to wait for memory operations to finish
 	HIP_SAFE_CALL(hipDeviceSynchronize());
@@ -213,9 +219,11 @@ int main(int argc, char *argv[]){
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
-		// Apply custom DVFS profile
-		int status = system("python applyDVFS.py 7 3");
-		printf("Apply DVFS status: %d\n", status);
+		#ifdef TEST_RUN
+			// Apply custom DVFS profile
+			status = system("python applyDVFS.py 7 3");
+			printf("Apply DVFS status: %d\n", status);
+		#endif
 
 		if(status == 0) {
 			printf("Start Testing\n");
@@ -226,10 +234,12 @@ int main(int argc, char *argv[]){
 			printf("Registered time: %f ms\n", n_time[0][0]);
 
 			// Resets the DVFS Settings
-			int status = system("rocm-smi -r");
-			status = system("./DVFS -P 7");
-			status = system("./DVFS -p 3");
-
+			status = system("rocm-smi -r");
+			#ifdef TEST_RUN
+				status = system("./DVFS -P 7");
+				status = system("./DVFS -p 3");
+			#endif
+				
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 
 			// Transfer data from device to host

@@ -823,6 +823,8 @@ elif args.c == 1:
                     last[editLevel] = 1
             if int(CoreVoltage[7]) < 900:
                 exit()
+            # if int(CoreFreq[7]) > 1440 and int(CoreVoltage[7]) < 950:
+            #     exit()
         else:
             # Overclock all levels Core by 10Hz
             CoreFreq = [int(volt) + args.step for volt in CoreFreq]
