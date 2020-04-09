@@ -25,6 +25,8 @@
 #define MAX_NUMBER 1.5
 #define PRECISION 1/10000
 
+#define TEST_RUN
+
 
 //CODE
 __global__ void warmup(int aux){ 
@@ -40,10 +42,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r1;//r0;
+			r1 = r2;//r1;
+			r2 = r3;//r2;
+			r3 = r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -126,7 +128,7 @@ int main(int argc, char *argv[]){
 
 	int i;
 	int device = 0;
-
+	int status;
 	hipDeviceProp_t deviceProp;
 
 	int ntries = 1;
@@ -136,10 +138,13 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-	// Resets the DVFS Settings
-	int status = system("rocm-smi -r");
-	status = system("./DVFS -P 7");
-	status = system("./DVFS -p 3");
+	#ifdef TEST_RUN
+		printf("TEST_RUN\n");
+		// Resets the DVFS Settings
+		status = system("rocm-smi -r");
+		status = system("./DVFS -P 7");
+		status = system("./DVFS -p 3");
+	#endif
 
 	int pid = fork();
 	if(pid == 0) {
@@ -211,8 +216,10 @@ int main(int argc, char *argv[]){
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
-		int status = system("python applyDVFS.py 7 3");
-		printf("Apply DVFS status: %d\n", status);
+		#ifdef TEST_RUN
+			status = system("python applyDVFS.py 7 3");
+			printf("Apply DVFS status: %d\n", status);
+		#endif
 
 		if(status == 0) {
 
@@ -224,10 +231,11 @@ int main(int argc, char *argv[]){
 			printf("Registered time: %f ms\n", n_time[0][0]);
 
 			// Resets the DVFS Settings
-			int status = system("rocm-smi -r");
-			status = system("./DVFS -P 7");
-			status = system("./DVFS -p 3");
-
+			status = system("rocm-smi -r");
+			#ifdef TEST_RUN
+				status = system("./DVFS -P 7");
+				status = system("./DVFS -p 3");
+			#endif
 		
 			HIP_SAFE_CALL(hipDeviceSynchronize());
 

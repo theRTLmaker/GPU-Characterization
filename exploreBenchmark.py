@@ -146,7 +146,7 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
         output_file.write("Execution: " + str(execution) + " .\n")
     appendCurrentTemp(filePath)
     
-    seconds = 45
+    seconds = 120
     try:
         if "3.6" in sys.version:
             with open(filePath, "a+") as output_file:
@@ -823,6 +823,10 @@ elif args.c == 1:
                     last[editLevel] = 1
             if int(CoreVoltage[7]) < 900:
                 exit()
+            # if int(CoreFreq[7]) > 1600 and int(CoreVoltage[7]) < 1050:
+            #     exit()
+            # if int(CoreFreq[7]) > 1500 and int(CoreVoltage[7]) < 1000:
+            #     exit()
             # if int(CoreFreq[7]) > 1440 and int(CoreVoltage[7]) < 950:
             #     exit()
         else:

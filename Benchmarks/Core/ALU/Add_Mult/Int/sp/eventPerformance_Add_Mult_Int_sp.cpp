@@ -10,7 +10,7 @@
 
 #include "lcutil.h"
 
-//#define TEST_RUN
+#define TEST_RUN
 
 #define COMP_ITERATIONS (4096) //512
 #define REGBLOCK_sizeB (4)

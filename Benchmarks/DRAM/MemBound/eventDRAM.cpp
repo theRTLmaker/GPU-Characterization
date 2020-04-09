@@ -116,12 +116,11 @@ void runbench(double* kernel_time, double* flops, int * hostIn0, int * hostIn1, 
 int main(int argc, char *argv[]){
 	int i;
 	int device = 0;
-	int status;
 
 	#ifdef TEST_RUN
 		printf("TEST_RUN\n");
 		// Resets the DVFS Settings to guarantee correct MemCpy of the data
-		status = system("rocm-smi -r");
+		int status = system("rocm-smi -r");
 		status = system("./DVFS -P 7");
 		status = system("./DVFS -p 3");
 	#endif
@@ -221,7 +220,7 @@ int main(int argc, char *argv[]){
 
 		#ifdef TEST_RUN
 			// Apply custom DVFS profile
-			status = system("python applyDVFS.py 7 3");
+			int status = system("python applyDVFS.py 7 3");
 			printf("Apply DVFS status: %d\n", status);
 		#endif
 
@@ -234,7 +233,7 @@ int main(int argc, char *argv[]){
 			printf("Registered time: %f ms\n", n_time[0][0]);
 
 			// Resets the DVFS Settings
-			status = system("rocm-smi -r");
+			int status = system("rocm-smi -r");
 			#ifdef TEST_RUN
 				status = system("./DVFS -P 7");
 				status = system("./DVFS -p 3");

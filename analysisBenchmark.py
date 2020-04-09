@@ -113,6 +113,9 @@ del outputNameVars[0]
 
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
+
+print(len(files), "files found.")
+
 # Dictionary holding a pandas dataframe for every benchmark type
 Benchmark = {}
 
@@ -188,6 +191,7 @@ for f in files:
             Benchmark[benchmarkType] = []
         Benchmark[benchmarkType].append(params)
 
+
 '''
     # Open the file and search for the output content
     with open(f, "r") as search:
@@ -212,7 +216,7 @@ for f in files:
             search.seek(0)
 
 '''
-
+print("Files parsing complete.")
 # Sort the benchmark types ascending
 temp = Benchmark.copy()
 Benchmark = {}

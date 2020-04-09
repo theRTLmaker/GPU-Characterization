@@ -11,7 +11,7 @@
 #include "lcutil.h"
 
 
-#define COMP_ITERATIONS (4096*4) //512
+#define COMP_ITERATIONS (128) //512
 #define REGBLOCK_sizeB (4)
 
 #define UNROLL_ITERATIONS (32)
@@ -43,10 +43,10 @@ __global__ void warmup(int aux){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
 			// Each iteration maps to doubleing point 8 operations (4 multiplies + 4 additions)
-			r0 = r0 + r1;//r0;
-			r1 = r1 + r2;//r1;
-			r2 = r2 + r3;//r2;
-			r3 = r3 + r0;//r3;
+			r0 = r1;//r0;
+			r1 = r2;//r1;
+			r2 = r3;//r2;
+			r3 = r0;//r3;
 		}
 	}
 	shared[threadIdx.x] = r0;
@@ -57,10 +57,11 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
 	long j;
 
-	register T r0, r1, r2, r3, r4, r5;
+	volatile T  r0, r1, r2, r3, r4, r5,
+				r6, r7;
 
-	r0=cdin[ite];
-	r1=cdin[ite+1];
+	r6 = r0=cdin[ite];
+	r7 = r1=cdin[ite+1];
 	r2=cdin[ite+1];
 	r3=cdin[ite+2];
 	r4 = r0;
@@ -69,17 +70,68 @@ template <class T> __global__ void benchmark(T* cdin, T* cdout){
 	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
 		#pragma unroll
 		for(int i=0; i<UNROLL_ITERATIONS; i++){
-			r0 = r0 + r0 * r1;//r0;r5;r4;r3;r2;r1;
-			r1 = r1 + r1 * r2;//r1;r0;r5;r4;r3;r2;
-			r2 = r2 + r2 * r3;//r2;r1;r0;r5;r4;r3;
-			r3 = r3 + r3 * r4;//r3;r2;r1;r0;r5;r4;
-			r4 = r4 + r4 * r5;//r4;r3;r2;r1;r0;r5;
-			r5 = r5 + r5 * r0;//r5;r4;r3;r2;r1;r0;
+			r0 = r0 + r0 * r0;
+			r1 = r1 + r1 * r1;
+			r2 = r2 + r2 * r2;
+			r3 = r3 + r3 * r3;
+			r4 = r4 + r4 * r4;
+			r5 = r5 + r5 * r5;
+			r6 = r6 + r6 * r6;
+			r7 = r7 + r7 * r7;
 		}
 	}
 
-	cdout[ite/4]=r0;
+	cdout[ite/4] = r0;
 }
+
+/*template <class T> __global__ void benchmark(T* cdin, T* cdout){
+
+	const long ite=(blockIdx.x * THREADS + threadIdx.x) * 4;
+	long j;
+
+	volatile T  r0, r1, r2, r3, r4, r5,
+				r6, r7, r8, r9, r10, r11,
+				r12, r13, r14, r15, r16, r17;
+
+	r12 = r6 = r0=cdin[ite];
+	r13 = r7 = r1=cdin[ite+1];
+	r14 = r8 = r2=cdin[ite+1];
+	r15 = r9 = r3=cdin[ite+2];
+	r16 = r10 = r4 = r0;
+	r17 = r11 = r5 = r1;
+
+	for(j=0; j<COMP_ITERATIONS; j+=UNROLL_ITERATIONS){
+		#pragma unroll
+		for(int i=0; i<UNROLL_ITERATIONS; i++){
+			r0 = r0 + r0 * r2;//r0;r5;r4;r3;r2;r1;
+			r6 = r6 + r6 * r8;
+			r12 = r12 + r12 * r14;
+
+			r1 = r1 + r1 * r3;//r1;r0;r5;r4;r3;r2;
+			r7 = r7 + r7 * r9;
+			r13 = r13 + r13 * r15;
+
+			r2 = r2 + r2 * r4;//r2;r1;r0;r5;r4;r3;
+			r8 = r8 + r8 * r10;
+			r14 = r14 + r14 * r16;
+
+			r3 = r3 + r3 * r5;//r3;r2;r1;r0;r5;r4;
+			r9 = r9 + r9 * r11;
+			r15 = r15 + r15 * r17;
+
+			r4 = r4 + r4 * r0;//r4;r3;r2;r1;r0;r5;
+			r10 = r10 + r10 * r6;
+			r16 = r16 + r16 * r12;
+
+			r5 = r5 + r5 * r1;//r5;r4;r3;r2;r1;r0;
+			r11 = r11 + r11 * r7;
+			r17 = r17 + r17 * r13;
+
+		}
+	}
+
+	cdout[ite/4] = r0 + r6 + r12;
+}*/
 
 
 void initializeEvents(hipEvent_t *start, hipEvent_t *stop){
@@ -153,7 +205,7 @@ int main(int argc, char *argv[]){
 		char *args[4];
 		std::string gpowerSAMPLER = "gpowerSAMPLER_peak";
 		std::string e = "-e";
-		std::string time_string = "-s 1";
+		std::string time_string = "-s 10";
 		args[0] = (char *) gpowerSAMPLER.c_str();
 		args[1] = (char *) e.c_str();
 		args[2] = (char *) time_string.c_str();
@@ -213,9 +265,9 @@ int main(int argc, char *argv[]){
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
-		for (i=0;i<1;i++){
+		/*for (i=0;i<1;i++){
 			runbench_warmup();
-		}
+		}*/
 		// Synchronize in order to wait for memory operations to finish
 		HIP_SAFE_CALL(hipDeviceSynchronize());
 
