@@ -7,7 +7,7 @@ CC = hipcc
 
 OBJ = o
 
-NAME = eventCacheL2_0op
+NAME = eventReduction
 
 # export LD_LIBRARY_PATH=/opt/cuda/lib:/opt/cuda/lib64:$LD_LIBRARY_PATH
 LIBS=

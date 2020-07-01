@@ -28,38 +28,116 @@
 
 #define TEST_RUN
 
+float ComputeMedian(std::list<float> listOfErrors) {
+	float median = 0;
+	int halfPos;
+    bool pair;
+    int listSize = 0;
+    int i = 0;
+
+	listSize = listOfErrors.size();
+    if(listSize != 0) {
+        halfPos = listSize / 2;
+        if (listSize % 2 == 0) 
+            pair = true;
+        else
+            pair = false;
+
+        std::list <float> :: iterator it; 
+        for(it = listOfErrors.begin(); it != listOfErrors.end(); ++it) {
+            if(i == halfPos - 1 && pair == true) {
+                median = *it;
+            }
+            else if(i == halfPos  && pair == true) {
+                median += *it;
+                median /= 2.0;
+                break;
+            }
+            else if(i == halfPos  && pair == false) {
+                median = *it;
+                break;
+            }
+            i++;
+        }
+
+    }
+
+    return median;
+}
+
 void CalculatePrintAvgMedian(std::list<float> listOfErrors) {
     float avg = 0.0;
+    float min_error = 0.0;
+    float max_error = 0.0;
     float median = 0.0;
     int i = 0;
     int halfPos = 0;
     bool pair;
+    int listSize = 0;
 
-    if(listOfErrors.size() != 0) {
-        halfPos = listOfErrors.size() / 2;
-        if (listOfErrors.size() % 2 == 0) 
+    std::list <float> firstHalf;
+    std::list <float> secondHalf; 
+
+    listSize = listOfErrors.size();
+    if(listSize != 0) {
+        halfPos = listSize / 2;
+        if (listSize % 2 == 0) 
             pair = true;
         else
-             pair = false;
+            pair = false;
 
         std::list <float> :: iterator it; 
         for(it = listOfErrors.begin(); it != listOfErrors.end(); ++it) {
-            if(i == halfPos) {
+        	if(i == 0)
+        		min_error = *it;
+
+        	if(i == listSize - 1)
+        		max_error = *it;
+
+        	if(i <  halfPos - 1) {
+        		firstHalf.push_front(*it);
+        	}
+            else if(i == halfPos - 1 && pair == true) {
                 median = *it;
+                firstHalf.push_front(*it);
             }
-            else if(i - 1 == halfPos && pair == false) {
+            else if(i == halfPos - 1  && pair == false) {
+            	firstHalf.push_front(*it);
+            }
+            else if(i == halfPos  && pair == true) {
                 median += *it;
                 median /= 2.0;
+                secondHalf.push_front(*it);
+            }
+            else if(i == halfPos  && pair == false) {
+                median = *it;
+            }
+            else {
+            	secondHalf.push_front(*it);
             }
             avg += *it;
             i++;
         }
-        avg /= listOfErrors.size();
+        avg /= listSize;
     }
+    float firstQuartile = ComputeMedian(firstHalf);
+    float thirdQuartile = ComputeMedian(secondHalf);
+    float IQR = thirdQuartile - firstQuartile;
     
     std::cout << "Average Percentage of Relative Error: " << avg << " %\n";
     std::cout << "Median Percentage of Relative Error: " << median << " %\n";
+
+    std::cout << "\n";
+    std::cout << "Minimum value: " << min_error << " %\n";
+    std::cout << "1st quartile: " << firstQuartile << " %\n";
+    std::cout << "2nd quartile: " << median << " %\n";
+    std::cout << "3rd quartile: " << thirdQuartile << " %\n";
+    std::cout << "Maximum value: " << max_error << " %\n";
+    std::cout << "IQR: " << IQR << " %\n";
+    std::cout << "\n";
 }
+
+
 
 void print(std::vector<int> const &input)
 {
@@ -340,7 +418,7 @@ int main(int argc, char **argv) {
                 if(relative_error > max_error)
                     max_error = relative_error;
                 if (relative_error > ERROR_TOLERANCE) {
-                    //std::cout << c_v[i] << " != " << c_v_default[i] << " ERROR: "<< abs(c_v[i] - c_v_default[i]) << '\n';
+                    std::cout << "ERROR: " << c_v[i] << " != " << c_v_default[i] << " ERROR: "<< abs(c_v[i] - c_v_default[i]) << " .\n";
                     errors++;
                     listOfErrors.push_front(relative_error);
                 }

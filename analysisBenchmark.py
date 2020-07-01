@@ -114,13 +114,15 @@ del outputNameVars[0]
 # Get all the files on the results folder
 files = [f for f in glob.glob(args.path[0] + "/*.txt", recursive=True)]
 
-print(len(files), "files found.")
+print(len(files), "files found at", args.path[0])
 
 # Dictionary holding a pandas dataframe for every benchmark type
 Benchmark = {}
 
 # Number of executions of every benchmark
 MaxnumberOfExecutions = 0
+
+numberOfValidFiles = 0
 
 # Run throw all the output files
 for f in files:
@@ -130,6 +132,7 @@ for f in files:
     filename = regex.match(f)
     if filename == None:
         continue
+    numberOfValidFiles += 1
     if filename.groups():
         for i in filename.groups():
             benchmarkType.append(i)
@@ -191,7 +194,9 @@ for f in files:
             Benchmark[benchmarkType] = []
         Benchmark[benchmarkType].append(params)
 
-
+print(numberOfValidFiles, "Files Correspond to Analysis")
+if numberOfValidFiles == 0:
+    exit()
 '''
     # Open the file and search for the output content
     with open(f, "r") as search:
@@ -233,6 +238,7 @@ for value in outputNameVars:
     for i in range(MaxnumberOfExecutions + 1):
         order.append(value + " " + str(i))
 
+
 # Create a Pandas Excel writer using XlsxWriter as the engine.
 excel_file = "./" + str(args.path[0]) + 'results.xlsx'
 sheet_name = 'Data'
@@ -244,7 +250,21 @@ writer = pd.ExcelWriter(excel_file, engine='xlsxwriter')
 Benchmark_dt = {}
 for key, value in Benchmark.items():
     Benchmark_dt[key] = pd.DataFrame.from_dict(Benchmark[key])
+    print(key)
+    # print(Benchmark_dt[key])
+    # print(Benchmark_dt[key].columns)
+    # for col in Benchmark_dt[key].columns:
+    #     print(col)
     Benchmark_dt[key] = Benchmark_dt[key][order]
+
+    typeOfBenchmark = Benchmark[key][0]['target']
+    if typeOfBenchmark == "CoreExploration":
+        Benchmark_dt[key]["core frequency temp"] = Benchmark_dt[key]["core frequency"]
+        Benchmark_dt[key]["core voltage temp"] = Benchmark_dt[key]["core voltage"]
+    else:
+        Benchmark_dt[key]["memory frequency temp"] = Benchmark_dt[key]["memory frequency"]
+        Benchmark_dt[key]["memory voltage temp"] = Benchmark_dt[key]["memory voltage"]
+
     Benchmark_dt[key].sort_values(
         by=[
             'target', 'object of study', 'core performance level',
@@ -260,6 +280,7 @@ for key, value in Benchmark.items():
         'core frequency', 'core voltage', 'memory performance level',
         'memory frequency', 'memory voltage'
     ], inplace=True)
+
     '''
     # Outliers removal
     # Go through every row of the dataframe and remove all the values that are on the 5% bigger and smaller
@@ -332,16 +353,25 @@ for key, value in Benchmark.items():
                     str(var) + " " +
                     str(analysis)] = Benchmark_dt[key][cols].apply(func=lambda row: countFalse(row), axis=1)
             # Compute the delta
-            if analysis != "boolean":
-                for index, row in Benchmark_dt[key].iterrows():
-                    pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
-                           defaultCore[index[2]][1], index[5],
-                           defaultMemory[index[5]][0], defaultMemory[index[5]][1])
-                    # print(key, pos)
-                    Benchmark_dt[key].at[index, "delta " + str(var) + " " + str(analysis)] = (
-                            Benchmark_dt[key].at[index, str(var) + " " + str(analysis)] -
-                            Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)]
-                        ) / Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)] * 100
+            # if analysis != "boolean":
+            #     for index, row in Benchmark_dt[key].iterrows():
+            #         pos = (index[0], index[1], index[2], defaultCore[index[2]][0],
+            #                defaultCore[index[2]][1], index[5],
+            #                defaultMemory[index[5]][0], defaultMemory[index[5]][1])
+            #         # print(key, pos)
+            #         Benchmark_dt[key].at[index, "delta " + str(var) + " " + str(analysis)] = (
+            #                 Benchmark_dt[key].at[index, str(var) + " " + str(analysis)] -
+            #                 Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)]
+            #             ) / Benchmark_dt[key].at[pos, str(var) + " " + str(analysis)] * 100
+
+    if typeOfBenchmark == "CoreExploration":
+        Benchmark_dt[key]["core voltage final"] = Benchmark_dt[key]["core voltage temp"]
+        Benchmark_dt[key]["core frequency final"] = Benchmark_dt[key]["core frequency temp"]
+        Benchmark_dt[key].drop(["core frequency final", "core voltage final"], axis=1)
+    else:
+        Benchmark_dt[key]["memory voltage final"] = Benchmark_dt[key]["memory voltage temp"]
+        Benchmark_dt[key]["memory frequency final"] = Benchmark_dt[key]["memory frequency temp"]
+        Benchmark_dt[key].drop(["memory frequency final", "memory voltage final"], axis=1)
 
 
 # Write the values to the excel file
@@ -355,95 +385,99 @@ for key, value in Benchmark.items():
         else:
             performancePairs[pair] += 1
 
-    # Translate the dataframe to excel
-    Benchmark_dt[key].to_excel(writer, sheet_name=str(key))
-
-    workbook = writer.book
-    worksheet = writer.sheets[str(key)]
-
-    # Get the number of experiments done
-    startGraphs = Benchmark_dt[key].count().max() + 1
-    i = 0
-    # Run over the variable analysis to be computed
-    for var, analysisList in varAnalysis.items():
-        analysisList[0] = [ x for x in analysisList[0] if "boolean" not in x ]
-        # Run over the types of analysis to performed
-        for analysis in analysisList[0]:
-            j = 0
-            totalEntriesPerPair = 1
-            # Run over the different performance DVFS domains existent
-            for pair, numberOfEntries in performancePairs.items():
-                # Create the raw data graph and the delta one
-                for dataType in ['', 'delta ']:
-                    # Get the horizontal position of the data on the Excel file
-                    columnLetters = colnum_string(
-                        Benchmark_dt[key].columns.get_loc(str(dataType) + str(var) + " " + str(analysis)) + 9)
-
-                    # Create a chart to represent the total training time
-                    chart = workbook.add_chart({
-                        'type': 'scatter',
-                        'subtype': 'straight_with_markers'
-                    })
-
-                    # Configure the series of the chart from the dataframe data.
-                    char_data = {
-                        # TODO meter no ficheiro de config o tipo de dados - titulo e eixos
-                        'name': dataType + 'Time',
-                        'values':'=' + str(key) + '!$' + columnLetters + '$' + str(totalEntriesPerPair + 1) +':$' + columnLetters + '$' + str(totalEntriesPerPair + numberOfEntries),
-                    }
-
-                    if Benchmark_dt[key].index.values[0][0] == "MemoryExploration":
-                        if Benchmark_dt[key].index.values[0][1] == "Voltage":
-                            char_data['categories'] = '=' + str(key) + '!$H$' + str(totalEntriesPerPair + 1) + ':$H$' + str(totalEntriesPerPair + numberOfEntries)
-                            chart.set_x_axis({
-                                'name': 'Voltage [mV]',
-                                'min': 800,
-                                'max': 1200
-                            })
-                        else:
-                            char_data['categories'] = '=' + str(key) + '!$G$' + str(totalEntriesPerPair + 1) + ':$G$' + str(totalEntriesPerPair + numberOfEntries)
-                            chart.set_x_axis({
-                                'name': 'Frequency [Hz]',
-                                'min': 800,
-                                'max': 1600
-                            })
-                    elif Benchmark_dt[key].index.values[0][0] == "CoreExploration":
-                        if Benchmark_dt[key].index.values[0][1] == "Voltage":
-                            char_data['categories'] = '=' + str(key) + '!$E$' + str(totalEntriesPerPair + 1) + ':$E$' + str(totalEntriesPerPair + numberOfEntries)
-                            chart.set_x_axis({
-                                'name': 'Voltage [mV]',
-                                'min': 800,
-                                'max': 1200
-                            })
-                        else:
-                            char_data['categories'] = '=' + str(key) + '!$D$' + str(totalEntriesPerPair + 1) + ':$D$' + str(totalEntriesPerPair + numberOfEntries)
-                            chart.set_x_axis({
-                                'name': 'Frequency [Hz]',
-                                'min': 800,
-                                'max': 1600
-                            })
-
-                    chart.add_series(char_data)
-                    # Configure the chart axes.
-                    if "delta" in dataType:
-                    	chart.set_title({'name': str(dataType) + str(var) + " [%]"})
-                    	chart.set_y_axis({'name': str(dataType) + " [%]", 'major_gridlines': {'visible': True}})
-                    else:
-                    	chart.set_title({'name': str(var) + " [" + str(analysis) + "]"})
-                    	chart.set_y_axis({'name': str(dataType) + " " + str(analysisList[1]), 'major_gridlines': {'visible': True}})
+    # Translate the dataframe to excel (excel only allows for sheet names with less than 32 char)
+    if len(key) >= 32:
+        Benchmark_dt[key].to_excel(writer, sheet_name=str(key[0:31]))
+    else:
+        Benchmark_dt[key].to_excel(writer, sheet_name=str(key))
 
 
-                    # Insert the chart into the worksheet.
-                    worksheet.insert_chart(
-                        'A' + str(startGraphs + 2), chart, {
-                            'x_offset': i * 500,
-                            'y_offset': j * 300,
-                            'x_scale': 1,
-                            'y_scale': 1
-                        })
-                    j += 1
-                totalEntriesPerPair += numberOfEntries
-            i += 1
+    # workbook = writer.book
+    # worksheet = writer.sheets[str(key)]
+
+    # # Get the number of experiments done
+    # startGraphs = Benchmark_dt[key].count().max() + 1
+    # i = 0
+    # # Run over the variable analysis to be computed
+    # for var, analysisList in varAnalysis.items():
+    #     analysisList[0] = [ x for x in analysisList[0] if "boolean" not in x ]
+    #     # Run over the types of analysis to performed
+    #     for analysis in analysisList[0]:
+    #         j = 0
+    #         totalEntriesPerPair = 1
+    #         # Run over the different performance DVFS domains existent
+    #         for pair, numberOfEntries in performancePairs.items():
+    #             # Create the raw data graph and the delta one
+    #             for dataType in ['', 'delta ']:
+    #                 # Get the horizontal position of the data on the Excel file
+    #                 columnLetters = colnum_string(
+    #                     Benchmark_dt[key].columns.get_loc(str(dataType) + str(var) + " " + str(analysis)) + 9)
+
+    #                 # Create a chart to represent the total training time
+    #                 chart = workbook.add_chart({
+    #                     'type': 'scatter',
+    #                     'subtype': 'straight_with_markers'
+    #                 })
+
+    #                 # Configure the series of the chart from the dataframe data.
+    #                 char_data = {
+    #                     # TODO meter no ficheiro de config o tipo de dados - titulo e eixos
+    #                     'name': dataType + 'Time',
+    #                     'values':'=' + str(key) + '!$' + columnLetters + '$' + str(totalEntriesPerPair + 1) +':$' + columnLetters + '$' + str(totalEntriesPerPair + numberOfEntries),
+    #                 }
+
+    #                 if Benchmark_dt[key].index.values[0][0] == "MemoryExploration":
+    #                     if Benchmark_dt[key].index.values[0][1] == "Voltage":
+    #                         char_data['categories'] = '=' + str(key) + '!$H$' + str(totalEntriesPerPair + 1) + ':$H$' + str(totalEntriesPerPair + numberOfEntries)
+    #                         chart.set_x_axis({
+    #                             'name': 'Voltage [mV]',
+    #                             'min': 800,
+    #                             'max': 1200
+    #                         })
+    #                     else:
+    #                         char_data['categories'] = '=' + str(key) + '!$G$' + str(totalEntriesPerPair + 1) + ':$G$' + str(totalEntriesPerPair + numberOfEntries)
+    #                         chart.set_x_axis({
+    #                             'name': 'Frequency [Hz]',
+    #                             'min': 800,
+    #                             'max': 1600
+    #                         })
+    #                 elif Benchmark_dt[key].index.values[0][0] == "CoreExploration":
+    #                     if Benchmark_dt[key].index.values[0][1] == "Voltage":
+    #                         char_data['categories'] = '=' + str(key) + '!$E$' + str(totalEntriesPerPair + 1) + ':$E$' + str(totalEntriesPerPair + numberOfEntries)
+    #                         chart.set_x_axis({
+    #                             'name': 'Voltage [mV]',
+    #                             'min': 800,
+    #                             'max': 1200
+    #                         })
+    #                     else:
+    #                         char_data['categories'] = '=' + str(key) + '!$D$' + str(totalEntriesPerPair + 1) + ':$D$' + str(totalEntriesPerPair + numberOfEntries)
+    #                         chart.set_x_axis({
+    #                             'name': 'Frequency [Hz]',
+    #                             'min': 800,
+    #                             'max': 1600
+    #                         })
+
+    #                 chart.add_series(char_data)
+    #                 # Configure the chart axes.
+    #                 if "delta" in dataType:
+    #                 	chart.set_title({'name': str(dataType) + str(var) + " [%]"})
+    #                 	chart.set_y_axis({'name': str(dataType) + " [%]", 'major_gridlines': {'visible': True}})
+    #                 else:
+    #                 	chart.set_title({'name': str(var) + " [" + str(analysis) + "]"})
+    #                 	chart.set_y_axis({'name': str(dataType) + " " + str(analysisList[1]), 'major_gridlines': {'visible': True}})
+
+
+    #                 # Insert the chart into the worksheet.
+    #                 worksheet.insert_chart(
+    #                     'A' + str(startGraphs + 2), chart, {
+    #                         'x_offset': i * 500,
+    #                         'y_offset': j * 300,
+    #                         'x_scale': 1,
+    #                         'y_scale': 1
+    #                     })
+    #                 j += 1
+    #             totalEntriesPerPair += numberOfEntries
+    #         i += 1
 
 '''
 # Create a pandas dataframe for every benchmark type

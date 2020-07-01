@@ -2,18 +2,15 @@ import subprocess
 import sys
 import json
 
-CoreLevel = int(sys.argv[1])
-MemoryLevel = int(sys.argv[2])
-configFile = None
-try:
-    configFile = sys.argv[3]
-except:
-    pass
+CoreLevel = 7
+MemoryLevel = 3
+CoreFrequencyInput = int(sys.argv[1])
+CoreVoltageInput = int(sys.argv[2])
 
-CoreFreq = []
-CoreVoltage = []
-MemoryFreq = []
-MemoryVoltage = []
+CoreFreq = [853, 860, 870, 880, 890, 900, 910, CoreFrequencyInput]
+CoreVoltage = [800, 810, 820, 830, 840, 850, 860, CoreVoltageInput]
+MemoryFreq = [168, 400, 450, 1000]
+MemoryVoltage = [801, 805, 810, 1001]
 
 def runBashCommand(bashCommand):
     """Runs a bash command
@@ -169,36 +166,7 @@ def editAllPerformanceLevels():
 
     return True
 
-if configFile == None:
-    with open('configFile.txt') as fp:
-        line = fp.readline()
-        i = 0
-        while line:
-            line = line.replace("\n", "").split(',')
-            if i < 8:
-                CoreFreq.append(int(line[0]))
-                CoreVoltage.append(int(line[1]))
-            else:
-                MemoryFreq.append(int(line[0]))
-                MemoryVoltage.append(int(line[1]))
-            line = fp.readline()
-            i += 1
-else:
-    with open(configFile) as fp:
-        line = fp.readline()
-        line = fp.readline()
-        line = fp.readline()
-        i = 0
-        while line:
-            line = line.replace("\n", "").split(',')
-            if i < 8:
-                CoreFreq.append(int(line[0]))
-                CoreVoltage.append(int(line[1]))
-            elif i >= 10:
-                MemoryFreq.append(int(line[0]))
-                MemoryVoltage.append(int(line[1]))
-            line = fp.readline()
-            i += 1
+
 
 def currentPerfLevel():
     """Gets the current applied performance level for the Core and Memory

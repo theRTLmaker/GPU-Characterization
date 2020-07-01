@@ -146,7 +146,7 @@ def runBashCommandOutputToFile(bashCommand, filePath, execution):
         output_file.write("Execution: " + str(execution) + " .\n")
     appendCurrentTemp(filePath)
     
-    seconds = 120
+    seconds = 150
     try:
         if "3.6" in sys.version:
             with open(filePath, "a+") as output_file:
@@ -582,6 +582,8 @@ else:
 # Export current DVFS Table
 exportDVFStable()
 
+print(args.benchmark)
+print(args.benchmark[0][:args.benchmark[0].rfind('/')])
 # Checks if the benchmark exists and create a Results folder
 folder = str(args.benchmark[0][:args.benchmark[0].rfind('/')])
 if not os.path.isdir(folder) or not os.path.isfile(args.benchmark[0]):
@@ -715,6 +717,15 @@ elif args.c == 1:
             failedPerfLevel = 0
             failedVoltage = 0
             failedInside = 0
+            setFan(255)
+            curTemp = getCurrentTemp()
+            print("Current Temperature: ", curTemp)
+            while curTemp > float(40):
+                # Set GPU fan to 100%
+                setFan(255)
+                time.sleep(2)
+                curTemp = getCurrentTemp()
+                print("Current Temperature: ", curTemp)
             while i < args.tries:
                 print("Try number: ", i)
                 # Set GPU fan to 100%
@@ -827,8 +838,8 @@ elif args.c == 1:
             #     exit()
             # if int(CoreFreq[7]) > 1500 and int(CoreVoltage[7]) < 1000:
             #     exit()
-            # if int(CoreFreq[7]) > 1440 and int(CoreVoltage[7]) < 950:
-            #     exit()
+            # if int(CoreFreq[7]) > 1349 and int(CoreVoltage[7]) < 950:
+                exit()
         else:
             # Overclock all levels Core by 10Hz
             CoreFreq = [int(volt) + args.step for volt in CoreFreq]

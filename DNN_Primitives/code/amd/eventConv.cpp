@@ -19,46 +19,123 @@
 #include <iterator> 
 #include <functional>
 
-#define ERROR_TOLERANCE 0.0001 
+#define ERROR_TOLERANCE 0.001 
 #define MAX_RAND 1
 #define MIN_RAND 0.1
 
 #define TEST_RUN
 #define FORWARD
-#define BACKWARD
+//#define BACKWARD
+
+float ComputeMedian(std::list<float> listOfErrors) {
+	float median = 0;
+	int halfPos;
+    bool pair;
+    int listSize = 0;
+    int i = 0;
+
+	listSize = listOfErrors.size();
+    if(listSize != 0) {
+        halfPos = listSize / 2;
+        if (listSize % 2 == 0) 
+            pair = true;
+        else
+            pair = false;
+
+        std::list <float> :: iterator it; 
+        for(it = listOfErrors.begin(); it != listOfErrors.end(); ++it) {
+            if(i == halfPos - 1 && pair == true) {
+                median = *it;
+            }
+            else if(i == halfPos  && pair == true) {
+                median += *it;
+                median /= 2.0;
+                break;
+            }
+            else if(i == halfPos  && pair == false) {
+                median = *it;
+                break;
+            }
+            i++;
+        }
+
+    }
+
+    return median;
+}
 
 void CalculatePrintAvgMedian(std::list<float> listOfErrors, std::string text) {
     float avg = 0.0;
+    float min_error = 0.0;
+    float max_error = 0.0;
     float median = 0.0;
     int i = 0;
     int halfPos = 0;
     bool pair;
+    int listSize = 0;
 
-    if(listOfErrors.size() != 0) {
-        halfPos = listOfErrors.size() / 2;
-        if (listOfErrors.size() % 2 == 0) 
+    std::list <float> firstHalf;
+    std::list <float> secondHalf; 
+
+    listSize = listOfErrors.size();
+    if(listSize != 0) {
+        halfPos = listSize / 2;
+        if (listSize % 2 == 0) 
             pair = true;
         else
-             pair = false;
+            pair = false;
 
         std::list <float> :: iterator it; 
         for(it = listOfErrors.begin(); it != listOfErrors.end(); ++it) {
-            if(i == halfPos) {
+        	if(i == 0)
+        		min_error = *it;
+
+        	if(i == listSize - 1)
+        		max_error = *it;
+
+        	if(i <  halfPos - 1) {
+        		firstHalf.push_front(*it);
+        	}
+            else if(i == halfPos - 1 && pair == true) {
                 median = *it;
+                firstHalf.push_front(*it);
             }
-            else if(i - 1 == halfPos && pair == false) {
+            else if(i == halfPos - 1  && pair == false) {
+            	firstHalf.push_front(*it);
+            }
+            else if(i == halfPos  && pair == true) {
                 median += *it;
                 median /= 2.0;
+                secondHalf.push_front(*it);
+            }
+            else if(i == halfPos  && pair == false) {
+                median = *it;
+            }
+            else {
+            	secondHalf.push_front(*it);
             }
             avg += *it;
             i++;
         }
-        avg /= listOfErrors.size();
+        avg /= listSize;
     }
+    float firstQuartile = ComputeMedian(firstHalf);
+    float thirdQuartile = ComputeMedian(secondHalf);
+    float IQR = thirdQuartile - firstQuartile;
     
-    std::cout << text <<" - Average Percentage of Relative Error: " << avg << " %\n";
-    std::cout << text <<" - Median Percentage of Relative Error: " << median << " %\n";
+    std::cout << text << "Average Percentage of Relative Error: " << avg << " %\n";
+    std::cout << text << "Median Percentage of Relative Error: " << median << " %\n";
+
+    std::cout  << "\n";
+    std::cout << text << "Minimum value: " << min_error << " %\n";
+    std::cout << text << "1st quartile: " << firstQuartile << " %\n";
+    std::cout << text << "2nd quartile: " << median << " %\n";
+    std::cout << text << "3rd quartile: " << thirdQuartile << " %\n";
+    std::cout << text << "Maximum value: " << max_error << " %\n";
+    std::cout << text << "IQR: " << IQR << " %\n";
+    std::cout << "\n";
 }
+
 
 float RandomFloat() {
 	float random = ((float) rand()) / (float) RAND_MAX;
@@ -585,12 +662,14 @@ std::tuple<int, int, int, std::string> time_cnn(
 		    errors = 0;
 		    max_error = 0;
 		   	relative_error = 0;
+
+		    std::cout << "Errors" << std::endl;
 		    for(std::vector<int>::size_type i = 0; i != output.size(); i++) {
 		        relative_error = abs(output_v[i] - output_v_default[i])/abs(output_v[i])*100;
 		        if(relative_error > max_error)
 		            max_error = relative_error;
 		        if (relative_error > ERROR_TOLERANCE) {
-		            //std::cout << output_v[i] << " != " << output_v_default[i] << " ERROR: "<< abs(output_v[i] - output_v_default[i]) << '\n';
+		            std::cout << "Forward: " << output_v[i] << " != " << output_v_default[i] << " ERROR: "<< abs(output_v[i] - output_v_default[i]) << " .\n";
 		            errors++;
 		            listOfErrors.push_front(relative_error);
 		        }
@@ -625,13 +704,14 @@ std::tuple<int, int, int, std::string> time_cnn(
 		    std::cout.precision(dbl::max_digits10);*/
 		    errors = 0;
 		    max_error = 0;
+		    std::cout << "Errors" << std::endl;
 		    for(std::vector<int>::size_type i = 0; i != dX_v.size(); i++) {
 		    	if(dX_v[i] != dX_v_default[i]) {	    		
 			        relative_error = abs(dX_v[i] - dX_v_default[i])/abs(dX_v[i])*100;
 			        if(relative_error > max_error)
 			            max_error = relative_error;
 			        if (relative_error > ERROR_TOLERANCE) {
-			            //std::cout << dX_v[i] << " != " << dX_v_default[i] << " ERROR: "<< abs(dX_v[i] - dX_v_default[i]) << '\n';
+			            //std::cout << "dX: " <<dX_v[i] << " != " << dX_v_default[i] << " ERROR: "<< abs(dX_v[i] - dX_v_default[i]) << '\n';
 			            errors++;
 			            listOfErrorsBackward.push_front(relative_error);
 			        }
@@ -640,6 +720,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 		    	}
 		    }
 
+		    std::cout << std::endl;
 		    //Sor the errors in the list
 		    listOfErrorsBackward.sort();
 
@@ -673,7 +754,7 @@ std::tuple<int, int, int, std::string> time_cnn(
 			        if(relative_error > max_error)
 			            max_error = relative_error;
 			        if (relative_error > ERROR_TOLERANCE) {
-			            //std::cout << dW_v[i] << " != " << dW_v_default[i] << " ERROR: "<< abs(dW_v[i] - dW_v_default[i]) << '\n';
+			            std::cout << "dW: " << dW_v[i] << " != " << dW_v_default[i] << " ERROR: "<< abs(dW_v[i] - dW_v_default[i]) << " .\n";
 			            errors++;
 			            listOfErrorsBackwardW.push_front(relative_error);
 			        }

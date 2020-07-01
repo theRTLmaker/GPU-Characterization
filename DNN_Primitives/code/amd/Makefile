@@ -42,6 +42,10 @@ eventConv:
 	$(MKDIR) $(BIN_DIR)
 	$(HIPCC) ${SOURCE_DIR}/eventConv.cpp -o $(BIN_DIR)/eventConv -I$(DEEPBENCH_INC) -I$(ROCM_INCLUDE) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
 
+eventConvSelect:
+	$(MKDIR) $(BIN_DIR)
+	$(HIPCC) ${SOURCE_DIR}/eventConvSelect.cpp -o $(BIN_DIR)/eventConvSelect -I$(DEEPBENCH_INC) -I$(ROCM_INCLUDE) -l$(MIOPEN_LIB) $(OPT) -std=c++11 --amdgpu-target=gfx900
+
 
 clean:
 	rm -rf $(BIN_DIR)
